@@ -16,7 +16,7 @@ const size_t   CRYPTONOTE_MAX_TX_SIZE                        = 1000000000;
 //TODO Currency-specific address prefix
 const uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX       = 0x1a78a5;
 //TODO Choose maturity period for your currency
-const size_t   CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW          = 60;
+const size_t   CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW          = 10;
 const uint64_t CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT            = 60 * 60 * 2;
 
 const size_t   BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW             = 60;
@@ -74,7 +74,7 @@ const char     MINER_CONFIG_FILE_NAME[]                      = "miner_conf.json"
 
 //TODO Put here the name of your currency
 const char     CRYPTONOTE_NAME[]                             = "karbowanez";
-const char     GENESIS_COINBASE_TX_HEX[]                     = "010a01ff0001f489898cb9ac11029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd0880712101e53e1274b96ea7da1923ddcf13ed35dd033ac325fa69ddf38556762aecfc747c";
+const char     GENESIS_COINBASE_TX_HEX[]                     = "010a01ff0001c5ddf0959a16029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd0880712101c0bf29829036bb35fdd6d231ce2993607ce1c73cfbab9388d438a00c93f666cb";
 
 const uint8_t  CURRENT_TRANSACTION_VERSION                   =  1;
 const uint8_t  BLOCK_MAJOR_VERSION_1                         =  1;
