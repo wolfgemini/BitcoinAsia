@@ -8,6 +8,9 @@
 #include <unordered_map>
 
 #include <Logging/LoggerRef.h>
+
+#include "Common/Math.h" // block explorer
+
 #include "CoreRpcServerCommandsDefinitions.h"
 
 namespace CryptoNote {
@@ -67,6 +70,14 @@ private:
 
   void fill_block_header_response(const Block& blk, bool orphan_status, uint64_t height, const Crypto::Hash& hash, block_header_response& responce);
 
+  // block exporer
+  bool f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::request& req, F_COMMAND_RPC_GET_BLOCKS_LIST::response& res);
+  bool f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& req, F_COMMAND_RPC_GET_BLOCK_DETAILS::response& res);
+  bool f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAILS::request& req, F_COMMAND_RPC_GET_TRANSACTION_DETAILS::response& res);
+  bool f_on_pool_json(const F_COMMAND_RPC_GET_POOL::request& req, F_COMMAND_RPC_GET_POOL::response& res);
+  bool f_getMixin(const Transaction& transaction, uint64_t& mixin);
+  // end of block explorer
+  
   Logging::LoggerRef logger;
   core& m_core;
   NodeServer& m_p2p;
