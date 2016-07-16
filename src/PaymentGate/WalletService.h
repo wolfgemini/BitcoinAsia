@@ -39,6 +39,7 @@ public:
   void init();
   void saveWallet();
 
+  std::error_code saveWalletNoThrow();
   std::error_code resetWallet();
   std::error_code replaceWithNewWallet(const std::string& viewSecretKey);
   std::error_code createAddress(const std::string& spendSecretKeyText, std::string& address);
