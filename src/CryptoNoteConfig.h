@@ -126,7 +126,8 @@ __attribute__((unused))
 // {<block height>, "<block hash>"},
 const std::initializer_list<CheckpointData> CHECKPOINTS = {
   {3436,	"fa0348c379f63af68304f9f256ea99cc8560eda5a25740dc7ff94631fc7fcf5d" },
-  {16500,	"08aa2f6c6a53b0f923b406a7b6d015fba12a38fcb7022b8131f7981d7908fef4" }
+  {16500,	"08aa2f6c6a53b0f923b406a7b6d015fba12a38fcb7022b8131f7981d7908fef4" },
+  {19000,	"51b7fd9ef65fbd83a69aaa3be5aa51c1e26be302c2bfad996270e3016983085d" }
 };
 } // CryptoNote
 
