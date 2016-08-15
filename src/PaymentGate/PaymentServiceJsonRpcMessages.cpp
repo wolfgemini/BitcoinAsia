@@ -7,6 +7,12 @@
 
 namespace PaymentService {
 
+void Save::Request::serialize(CryptoNote::ISerializer& /*serializer*/) {
+}
+
+void Save::Response::serialize(CryptoNote::ISerializer& /*serializer*/) {
+}
+
 void Reset::Request::serialize(CryptoNote::ISerializer& serializer) {
   serializer(viewSecretKey, "viewSecretKey");
 }
