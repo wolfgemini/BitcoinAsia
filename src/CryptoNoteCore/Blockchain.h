@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2016, The Karbowanec developers
 //
 // This file is part of Bytecoin.
 //
@@ -91,6 +92,7 @@ namespace CryptoNote {
     difficulty_type getDifficultyForNextBlock();
     uint64_t getCoinsInCirculation();
     uint8_t getBlockMajorVersionForHeight(uint32_t height) const;
+	uint8_t blockMajorVersion;
     bool addNewBlock(const Block& bl_, block_verification_context& bvc);
     bool resetAndSetGenesisBlock(const Block& b);
     bool haveBlock(const Crypto::Hash& id);

@@ -1042,7 +1042,7 @@ void WalletService::replaceWithNewWallet(const Crypto::SecretKey& viewSecretKey)
 
     if (!boost::filesystem::exists(backup)) {
       boost::filesystem::rename(config.walletFile, backup);
-      logger(Logging::DEBUGGING) << "Walled file '" << config.walletFile  << "' backed up to '" << backup << '\'';
+      logger(Logging::DEBUGGING) << "Walletd file '" << config.walletFile  << "' backed up to '" << backup << '\'';
       break;
     }
   }

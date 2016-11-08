@@ -11,6 +11,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU Lesser General Public License for more details.
+// Copyright (c) 2014-2016 XDN developers
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
@@ -38,7 +39,7 @@ public:
 
   HttpServer(System::Dispatcher& dispatcher, Logging::ILogger& log);
 
-  void start(const std::string& address, uint16_t port);
+  void start(const std::string& address, uint16_t port, const std::string& user = "", const std::string& password = "");
   void stop();
 
   virtual void processRequest(const HttpRequest& request, HttpResponse& response) = 0;
@@ -51,11 +52,13 @@ private:
 
   void acceptLoop();
   void connectionHandler(System::TcpConnection&& conn);
+  bool authenticate(const HttpRequest& request) const;
 
   System::ContextGroup workingContextGroup;
   Logging::LoggerRef logger;
   System::TcpListener m_listener;
   std::unordered_set<System::TcpConnection*> m_connections;
+  std::string m_credentials;
 };
 
 }

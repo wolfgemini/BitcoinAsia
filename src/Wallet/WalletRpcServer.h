@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2014-2016 XDN developers
 //
 // This file is part of Bytecoin.
 //
@@ -53,6 +54,8 @@ namespace Tools
 
     static const command_line::arg_descriptor<uint16_t> arg_rpc_bind_port;
     static const command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
+	static const command_line::arg_descriptor<std::string> arg_rpc_user;
+    static const command_line::arg_descriptor<std::string> arg_rpc_password;
 
   private:
 
@@ -74,6 +77,8 @@ namespace Tools
     CryptoNote::INode& m_node;
     uint16_t m_port;
     std::string m_bind_ip;
+	std::string m_rpcUser;
+    std::string m_rpcPassword;
     CryptoNote::Currency& m_currency;
     const std::string m_walletFilename;
 

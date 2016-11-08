@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers, The Karbovanets developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,6 +24,7 @@
 #include <thread>
 #include <set>
 #include <sstream>
+#include <locale>
 
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
@@ -52,6 +53,7 @@
 #include <Logging/LoggerManager.h>
 
 #if defined(WIN32)
+#include <Windows.h>
 #include <crtdbg.h>
 #endif
 
@@ -71,7 +73,7 @@ const command_line::arg_descriptor<std::string> arg_generate_new_wallet = { "gen
 const command_line::arg_descriptor<std::string> arg_daemon_address = { "daemon-address", "Use daemon instance at <host>:<port>", "" };
 const command_line::arg_descriptor<std::string> arg_daemon_host = { "daemon-host", "Use daemon instance at host <arg> instead of localhost", "" };
 const command_line::arg_descriptor<std::string> arg_password = { "password", "Wallet password", "", true };
-const command_line::arg_descriptor<uint16_t> arg_daemon_port = { "daemon-port", "Use daemon instance at port <arg> instead of 8081", 0 };
+const command_line::arg_descriptor<uint16_t> arg_daemon_port = { "daemon-port", "Use daemon instance at port <arg> instead of 32348", 0 };
 const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", INFO, true };
 const command_line::arg_descriptor<bool> arg_testnet = { "testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false };
 const command_line::arg_descriptor< std::vector<std::string> > arg_command = { "command", "" };
@@ -209,6 +211,10 @@ struct TransferCommand {
           auto value = ar.next();
           bool ok = m_currency.parseAmount(value, de.amount);
           if (!ok || 0 == de.amount) {
+#if defined(WIN32)
+#undef max
+#undef min
+#endif 
             logger(ERROR, BRIGHT_RED) << "amount is wrong: " << arg << ' ' << value <<
               ", expected number from 0 to " << m_currency.formatAmount(std::numeric_limits<uint64_t>::max());
             return false;
@@ -1067,6 +1073,9 @@ void simple_wallet::printConnectionError() const {
 
 int main(int argc, char* argv[]) {
 #ifdef WIN32
+   setlocale(LC_ALL, "");
+   SetConsoleCP(1251);
+   SetConsoleOutputCP(1251);
   _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
