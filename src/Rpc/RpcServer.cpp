@@ -99,6 +99,7 @@ std::unordered_map<std::string, RpcServer::RpcHandler<RpcServer::HandlerFunction
   { "/getheight", { jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height), true } },
   { "/gettransactions", { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions), false } },
   { "/sendrawtransaction", { jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx), false } },
+  { "/feeaddress", { jsonMethod<COMMAND_RPC_GET_FEE_ADDRESS>(&RpcServer::on_get_fee_address), true } },  
   
   // disabled in restricted rpc mode
   { "/start_mining", { jsonMethod<COMMAND_RPC_START_MINING>(&RpcServer::on_start_mining), false } },
@@ -195,6 +196,11 @@ bool RpcServer::restrictRPC(const bool is_restricted) {
 
 bool RpcServer::enableCors(const std::string domain) {
   m_cors_domain = domain;
+  return true;
+}
+
+bool RpcServer::setFeeAddress(const std::string fee_address) {
+  m_fee_address = fee_address;
   return true;
 }
 
@@ -489,6 +495,11 @@ bool RpcServer::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request& req, COMM
     res.status = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
     return false;
   }
+  return true;
+}
+
+bool RpcServer::on_get_fee_address(const COMMAND_RPC_GET_FEE_ADDRESS::request& req, COMMAND_RPC_GET_FEE_ADDRESS::response& res) {
+  res.fee_address = m_fee_address;
   return true;
 }
 
