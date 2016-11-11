@@ -141,33 +141,50 @@ namespace CryptoNote {
 		uint64_t fee, uint64_t& reward, int64_t& emissionChange) const {
 		// assert(alreadyGeneratedCoins <= m_moneySupply);
 		assert(m_emissionSpeedFactor > 0 && m_emissionSpeedFactor <= 8 * sizeof(uint64_t));
+		// Tail emission
+		if (alreadyGeneratedCoins + CryptoNote::parameters::TAIL_EMISSION_REWARD <= m_moneySupply) {
+			uint64_t baseReward = (m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor;
+			if (baseReward < CryptoNote::parameters::TAIL_EMISSION_REWARD)
+			{
+				baseReward = CryptoNote::parameters::TAIL_EMISSION_REWARD;
+			}
+				size_t blockGrantedFullRewardZone = blockGrantedFullRewardZoneByBlockVersion(blockMajorVersion);
+				medianSize = std::max(medianSize, blockGrantedFullRewardZone);
+				if (currentBlockSize > UINT64_C(2) * medianSize) {
+					logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
+					return false;
+				}
 
-		uint64_t baseReward = (m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor;
-		// Tail emission - after reward reaches 1 krb it will stay at that level
-		if (baseReward < CryptoNote::parameters::TAIL_EMISSION_REWARD)
-		{
-			baseReward = CryptoNote::parameters::TAIL_EMISSION_REWARD;
+				uint64_t penalizedBaseReward = getPenalizedAmount(baseReward, medianSize, currentBlockSize);
+				uint64_t penalizedFee = blockMajorVersion >= BLOCK_MAJOR_VERSION_2 ? getPenalizedAmount(fee, medianSize, currentBlockSize) : fee;
+				if (cryptonoteCoinVersion() == 1) {
+					penalizedFee = getPenalizedAmount(fee, medianSize, currentBlockSize);
+				}
+
+				emissionChange = penalizedBaseReward - (fee - penalizedFee);
+				reward = penalizedBaseReward + penalizedFee;
 		}
+		else {
+			uint64_t baseReward = CryptoNote::parameters::TAIL_EMISSION_REWARD;
+			size_t blockGrantedFullRewardZone = blockGrantedFullRewardZoneByBlockVersion(blockMajorVersion);
+			medianSize = std::max(medianSize, blockGrantedFullRewardZone);
+			if (currentBlockSize > UINT64_C(2) * medianSize) {
+				logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
+				return false;
+			}
 
-		size_t blockGrantedFullRewardZone = blockGrantedFullRewardZoneByBlockVersion(blockMajorVersion);
-		medianSize = std::max(medianSize, blockGrantedFullRewardZone);
-		if (currentBlockSize > UINT64_C(2) * medianSize) {
-			logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
-			return false;
+			uint64_t penalizedBaseReward = getPenalizedAmount(baseReward, medianSize, currentBlockSize);
+			uint64_t penalizedFee = blockMajorVersion >= BLOCK_MAJOR_VERSION_2 ? getPenalizedAmount(fee, medianSize, currentBlockSize) : fee;
+			if (cryptonoteCoinVersion() == 1) {
+				penalizedFee = getPenalizedAmount(fee, medianSize, currentBlockSize);
+			}
+
+			emissionChange = penalizedBaseReward - (fee - penalizedFee);
+			reward = penalizedBaseReward + penalizedFee;
 		}
-
-		uint64_t penalizedBaseReward = getPenalizedAmount(baseReward, medianSize, currentBlockSize);
-		uint64_t penalizedFee = blockMajorVersion >= BLOCK_MAJOR_VERSION_2 ? getPenalizedAmount(fee, medianSize, currentBlockSize) : fee;
-		if (cryptonoteCoinVersion() == 1) {
-			penalizedFee = getPenalizedAmount(fee, medianSize, currentBlockSize);
-		}
-
-		emissionChange = penalizedBaseReward - (fee - penalizedFee);
-		reward = penalizedBaseReward + penalizedFee;
 
 		return true;
 	}
-
 
 	size_t Currency::maxBlockCumulativeSize(uint64_t height) const {
 		assert(height <= std::numeric_limits<uint64_t>::max() / m_maxBlockSizeGrowthSpeedNumerator);
