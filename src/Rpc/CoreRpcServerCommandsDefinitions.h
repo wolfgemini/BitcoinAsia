@@ -308,16 +308,17 @@ struct COMMAND_RPC_STOP_DAEMON {
   typedef STATUS_STRUCT response;
 };
 
-//
-
+//-----------------------------------------------
 struct COMMAND_RPC_GET_FEE_ADDRESS {
   typedef EMPTY_STRUCT request;
 
   struct response {
     std::string fee_address;
+	std::string status;
 
     void serialize(ISerializer &s) {
       KV_MEMBER(fee_address)
+	  KV_MEMBER(status)
     }
   };
 };
