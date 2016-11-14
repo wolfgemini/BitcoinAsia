@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers, The Karbovanets developers
+// Copyright (c) 2014-2016 XDN developers
 //
 // This file is part of Bytecoin.
 //
@@ -223,6 +224,13 @@ struct TransferCommand {
           destination.amount = de.amount;
 
           dsts.push_back(destination);
+		  
+		  if (!remote_fee_address.empty()) {
+			destination.address = remote_fee_address;
+			destination.amount = de.amount * 0.25 / 100;
+			dsts.push_back(destination);
+		  }
+		  
         }
       }
 
@@ -441,6 +449,26 @@ bool writeAddressFile(const std::string& addressFilename, const std::string& add
   return true;
 }
 
+bool processServerFeeAddressResponse(const std::string& response, std::string& fee_address) {
+	try {
+		std::stringstream stream(response);
+		JsonValue json;
+		stream >> json;
+
+		auto rootIt = json.getObject().find("fee_address");
+		if (rootIt == json.getObject().end()) {
+			return false;
+		}
+
+		fee_address = rootIt->second.getString();
+	}
+	catch (std::exception&) {
+		return false;
+	}
+
+	return true;
+}
+
 }
 
 std::string simple_wallet::get_commands_str() {
@@ -580,7 +608,11 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
       fail_msg_writer() << "failed to parse daemon address: " << m_daemon_address;
       return false;
     }
+	remote_fee_address = getFeeAddress();
   } else {
+   if (!m_daemon_host.empty()) {
+	  remote_fee_address = getFeeAddress();
+    }
     m_daemon_address = std::string("http://") + m_daemon_host + ":" + std::to_string(m_daemon_port);
   }
 
@@ -988,6 +1020,28 @@ bool simple_wallet::show_blockchain_height(const std::vector<std::string>& args)
   }
 
   return true;
+}
+//----------------------------------------------------------------------------------------------------
+std::string simple_wallet::getFeeAddress() {
+  
+  HttpClient httpClient(m_dispatcher, m_daemon_host, m_daemon_port);
+
+  HttpRequest req;
+  HttpResponse res;
+
+  req.setUrl("/feeaddress");
+  httpClient.request(req, res);
+
+  if (res.getStatus() != HttpResponse::STATUS_200) {
+    throw std::runtime_error("Remote server returned code " + std::to_string(res.getStatus()));
+  }
+
+  std::string address;
+  if (!processServerFeeAddressResponse(res.getBody(), address)) {
+    throw std::runtime_error("Failed to parse server response");
+  }
+
+  return address;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::transfer(const std::vector<std::string> &args) {
