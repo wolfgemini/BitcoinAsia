@@ -445,7 +445,7 @@ namespace CryptoNote {
  			uint64_t low, high;
 			low = mul128(totalWork, m_difficultyTarget, &high);
 			// blockchain error "Difficulty overhead" if this function returns zero
-			if (high != 0 || low + timeSpan - 1 < low) {
+			if (high != 0) {
 				return 0;
 			}
 
