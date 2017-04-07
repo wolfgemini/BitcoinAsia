@@ -1,6 +1,6 @@
 // Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers, The Karbovanets developers
 // Copyright (c) 2014-2016 XDN developers
-// Copyright (c) 2014-2016 The Karbovanets developers
+// Copyright (c) 2016-2017 The Karbowanec developers
 //
 // This file is part of Bytecoin.
 //
@@ -102,7 +102,9 @@ namespace CryptoNote
     bool save(const std::vector<std::string> &args);
     bool reset(const std::vector<std::string> &args);
     bool set_log(const std::vector<std::string> &args);
-    
+	bool change_password();
+	std::string simple_wallet::get_password();
+
     bool ask_wallet_create_if_needed();
 
     void printConnectionError() const;
@@ -168,10 +170,10 @@ namespace CryptoNote
     std::string m_restore_new;
     std::string m_track_new;
     std::string m_import_path;
-
     std::string m_daemon_address;
     std::string m_daemon_host;
     uint16_t m_daemon_port;
+    std::string m_change_password;
 
     std::string m_wallet_file;
 
@@ -182,6 +184,7 @@ namespace CryptoNote
     Logging::LoggerManager& logManager;
     System::Dispatcher& m_dispatcher;
     Logging::LoggerRef logger;
+    Tools::PasswordContainer pwd_container;
 
     std::unique_ptr<CryptoNote::NodeRpcProxy> m_node;
     std::unique_ptr<CryptoNote::IWalletLegacy> m_wallet;
