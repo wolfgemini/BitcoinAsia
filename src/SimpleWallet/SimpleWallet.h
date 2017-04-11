@@ -103,7 +103,7 @@ namespace CryptoNote
     bool reset(const std::vector<std::string> &args);
     bool set_log(const std::vector<std::string> &args);
 	bool change_password();
-	std::string simple_wallet::get_password();
+	std::string get_password();
 
     bool ask_wallet_create_if_needed();
 
