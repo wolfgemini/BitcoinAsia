@@ -923,25 +923,30 @@ bool core::getPoolTransactionsByTimestamp(uint64_t timestampBegin, uint64_t time
 }
 
 bool core::getTransactionsByPaymentId(const Crypto::Hash& paymentId, std::vector<Transaction>& transactions) {
-  std::vector<Crypto::Hash> blockchainTransactionHashes;
-  if (!m_blockchain.getTransactionIdsByPaymentId(paymentId, blockchainTransactionHashes)) {
-    return false;
-  }
-  std::vector<Crypto::Hash> poolTransactionHashes;
-  if (!m_mempool.getTransactionIdsByPaymentId(paymentId, poolTransactionHashes)) {
-    return false;
-  }
-  std::list<Transaction> txs;
-  std::list<Crypto::Hash> missed_txs;
-  blockchainTransactionHashes.insert(blockchainTransactionHashes.end(), poolTransactionHashes.begin(), poolTransactionHashes.end());
+	std::vector<Crypto::Hash> blockchainTransactionHashes;
+	m_blockchain.getTransactionIdsByPaymentId(paymentId, blockchainTransactionHashes);
+	
+	std::vector<Crypto::Hash> poolTransactionHashes;
+	m_mempool.getTransactionIdsByPaymentId(paymentId, poolTransactionHashes);
+	
+	std::list<Transaction> txs;
+	std::list<Crypto::Hash> missed_txs;
 
-  getTransactions(blockchainTransactionHashes, txs, missed_txs, true);
-  if (missed_txs.size() > 0) {
-    return false;
-  }
+	if (!poolTransactionHashes.empty()) {
+		blockchainTransactionHashes.insert(blockchainTransactionHashes.end(), poolTransactionHashes.begin(), poolTransactionHashes.end());
+	}
 
-  transactions.insert(transactions.end(), txs.begin(), txs.end());
-  return true;
+	if (blockchainTransactionHashes.empty()) {
+		return false;
+	}
+
+	getTransactions(blockchainTransactionHashes, txs, missed_txs, true);
+	if (missed_txs.size() > 0) {
+		return false;
+	}
+
+	transactions.insert(transactions.end(), txs.begin(), txs.end());
+	return true;
 }
 
 std::error_code core::executeLocked(const std::function<std::error_code()>& func) {
