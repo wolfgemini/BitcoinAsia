@@ -277,11 +277,41 @@ bool core::check_tx_semantic(const Transaction& tx, bool keeped_by_block) {
 
 bool core::check_tx_inputs_keyimages_diff(const Transaction& tx) {
   std::unordered_set<Crypto::KeyImage> ki;
-  for (const auto& in : tx.inputs) {
-    if (in.type() == typeid(KeyInput)) {
-      if (!ki.insert(boost::get<KeyInput>(in).keyImage).second)
-        return false;
-    }
+  std::set<std::pair<uint64_t, uint32_t>> outputsUsage;
+  for (const auto& input : tx.inputs) {
+	  uint64_t amount = 0;
+	  if (input.type() == typeid(KeyInput)) {  
+		  const KeyInput& in = boost::get<KeyInput>(input);
+		  amount = in.amount;
+		  if (!ki.insert(in.keyImage).second) {
+			  logger(ERROR) << "Transaction has identical key images";
+			  return false;
+		  }
+
+		  if (in.outputIndexes.empty()) {
+			  logger(ERROR) << "Transaction's input uses empty output";
+			  return false;
+		  }
+
+		  // outputIndexes are packed here, first is absolute, others are offsets to previous,
+		  // so first can be zero, others can't
+		  if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
+			  logger(ERROR) << "Transaction has identical output indexes";
+			  return false;
+		  }
+	  }
+	  else if (input.type() == typeid(MultisignatureInput)) {
+		  const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
+		  amount = in.amount;
+		  if (!outputsUsage.insert(std::make_pair(in.amount, in.outputIndex)).second) {
+			  logger(ERROR) << "Transaction has identical output indexes";
+			  return false;
+		  }
+	  }
+	  else {
+		  logger(ERROR) << "Transaction has input with unknown type";
+		  return false;
+	  }
   }
   return true;
 }
@@ -927,13 +957,14 @@ bool core::getTransactionsByPaymentId(const Crypto::Hash& paymentId, std::vector
   if (!m_blockchain.getTransactionIdsByPaymentId(paymentId, blockchainTransactionHashes)) {
     return false;
   }
-  std::vector<Crypto::Hash> poolTransactionHashes;
-  if (!m_mempool.getTransactionIdsByPaymentId(paymentId, poolTransactionHashes)) {
-    return false;
-  }
+  
   std::list<Transaction> txs;
   std::list<Crypto::Hash> missed_txs;
-  blockchainTransactionHashes.insert(blockchainTransactionHashes.end(), poolTransactionHashes.begin(), poolTransactionHashes.end());
+  std::vector<Crypto::Hash> poolTransactionHashes;
+  
+  if (m_mempool.getTransactionIdsByPaymentId(paymentId, poolTransactionHashes)) {
+	blockchainTransactionHashes.insert(blockchainTransactionHashes.end(), poolTransactionHashes.begin(), poolTransactionHashes.end());
+  }
 
   getTransactions(blockchainTransactionHashes, txs, missed_txs, true);
   if (missed_txs.size() > 0) {
