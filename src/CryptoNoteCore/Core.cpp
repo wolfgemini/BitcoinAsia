@@ -279,10 +279,8 @@ bool core::check_tx_inputs_keyimages_diff(const Transaction& tx) {
   std::unordered_set<Crypto::KeyImage> ki;
   std::set<std::pair<uint64_t, uint32_t>> outputsUsage;
   for (const auto& input : tx.inputs) {
-    uint64_t amount = 0;
     if (input.type() == typeid(KeyInput)) {
       const KeyInput& in = boost::get<KeyInput>(input);
-      amount = in.amount;
       if (!ki.insert(in.keyImage).second) {
         logger(ERROR) << "Transaction has identical key images";
           return false;
