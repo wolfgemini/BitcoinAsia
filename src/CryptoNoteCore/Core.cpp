@@ -277,10 +277,26 @@ bool core::check_tx_semantic(const Transaction& tx, bool keeped_by_block) {
 
 bool core::check_tx_inputs_keyimages_diff(const Transaction& tx) {
   std::unordered_set<Crypto::KeyImage> ki;
-  for (const auto& in : tx.inputs) {
-    if (in.type() == typeid(KeyInput)) {
-      if (!ki.insert(boost::get<KeyInput>(in).keyImage).second)
+  std::set<std::pair<uint64_t, uint32_t>> outputsUsage;
+  for (const auto& input : tx.inputs) {
+    if (input.type() == typeid(KeyInput)) {
+      const KeyInput& in = boost::get<KeyInput>(input);
+      if (!ki.insert(in.keyImage).second) {
+        logger(ERROR) << "Transaction has identical key images";
+          return false;
+      }
+
+      if (in.outputIndexes.empty()) {
+        logger(ERROR) << "Transaction's input uses empty output";
         return false;
+      }
+
+      // outputIndexes are packed here, first is absolute, others are offsets to previous,
+      // so first can be zero, others can't
+      if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
+        logger(ERROR) << "Transaction has identical output indexes";
+        return false;
+      }
     }
   }
   return true;
@@ -923,30 +939,30 @@ bool core::getPoolTransactionsByTimestamp(uint64_t timestampBegin, uint64_t time
 }
 
 bool core::getTransactionsByPaymentId(const Crypto::Hash& paymentId, std::vector<Transaction>& transactions) {
-	std::vector<Crypto::Hash> blockchainTransactionHashes;
-	m_blockchain.getTransactionIdsByPaymentId(paymentId, blockchainTransactionHashes);
-	
-	std::vector<Crypto::Hash> poolTransactionHashes;
-	m_mempool.getTransactionIdsByPaymentId(paymentId, poolTransactionHashes);
-	
-	std::list<Transaction> txs;
-	std::list<Crypto::Hash> missed_txs;
+  std::vector<Crypto::Hash> blockchainTransactionHashes;
+  m_blockchain.getTransactionIdsByPaymentId(paymentId, blockchainTransactionHashes);
 
-	if (!poolTransactionHashes.empty()) {
-		blockchainTransactionHashes.insert(blockchainTransactionHashes.end(), poolTransactionHashes.begin(), poolTransactionHashes.end());
-	}
+  std::vector<Crypto::Hash> poolTransactionHashes;
+  m_mempool.getTransactionIdsByPaymentId(paymentId, poolTransactionHashes);
 
-	if (blockchainTransactionHashes.empty()) {
-		return false;
-	}
+  std::list<Transaction> txs;
+  std::list<Crypto::Hash> missed_txs;
 
-	getTransactions(blockchainTransactionHashes, txs, missed_txs, true);
-	if (missed_txs.size() > 0) {
-		return false;
-	}
+  if (!poolTransactionHashes.empty()) {
+    blockchainTransactionHashes.insert(blockchainTransactionHashes.end(), poolTransactionHashes.begin(), poolTransactionHashes.end());
+  }
 
-	transactions.insert(transactions.end(), txs.begin(), txs.end());
-	return true;
+  if (blockchainTransactionHashes.empty()) {
+    return false;
+  }
+
+  getTransactions(blockchainTransactionHashes, txs, missed_txs, true);
+    if (missed_txs.size() > 0) {
+      return false;
+  }
+
+  transactions.insert(transactions.end(), txs.begin(), txs.end());
+  return true;
 }
 
 std::error_code core::executeLocked(const std::function<std::error_code()>& func) {
