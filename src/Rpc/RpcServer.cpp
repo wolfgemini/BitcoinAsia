@@ -536,6 +536,8 @@ bool RpcServer::f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::reque
     m_core.getBlockSize(block_hash, tx_cumulative_block_size);
     size_t blokBlobSize = getObjectBinarySize(blk);
     size_t minerTxBlobSize = getObjectBinarySize(blk.baseTransaction);
+    difficulty_type blockDiff;
+    m_core.getBlockDifficulty(static_cast<uint32_t>(i), blockDiff);
 
     f_block_short_response block_short;
     block_short.cumul_size = blokBlobSize + tx_cumulative_block_size - minerTxBlobSize;
@@ -544,6 +546,7 @@ bool RpcServer::f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::reque
     block_short.hash = Common::podToHex(block_hash);
     block_short.cumul_size = blokBlobSize + tx_cumulative_block_size - minerTxBlobSize;
     block_short.tx_count = blk.transactionHashes.size() + 1;
+	block_short.difficulty = blockDiff;
 
     res.blocks.push_back(block_short);
 
