@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers, The Karbowanec developers
 //
 // This file is part of Bytecoin.
 //
@@ -473,6 +473,8 @@ namespace CryptoNote
     //configure self
     // m_net_server.get_config_object().m_pcommands_handler = this;
     // m_net_server.get_config_object().m_invoke_timeout = CryptoNote::P2P_DEFAULT_INVOKE_TIMEOUT;
+
+	logger(INFO) << "Network: " << m_network_id;
 
     //try to bind
     logger(INFO) << "Binding on " << m_bind_ip << ":" << m_port;
