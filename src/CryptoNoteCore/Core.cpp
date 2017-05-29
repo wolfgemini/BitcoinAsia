@@ -298,6 +298,7 @@ bool core::check_tx_inputs_keyimages_diff(const Transaction& tx) {
       }
 
 	  // additional key_image check
+	  // Fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
 	  if (!(scalarmultKey(in.keyImage, L) == I)) {
 		  logger(ERROR) << "Transaction uses key image not in the valid domain";
 		  return false;
