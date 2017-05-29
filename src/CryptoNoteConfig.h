@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers, The Karbowanec developers
 //
 // This file is part of Bytecoin.
 //
@@ -121,7 +121,8 @@ const size_t   P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT          = 5000;          //
 const char     P2P_STAT_TRUSTED_PUB_KEY[]                    = "8f80f9a5a434a9f1510d13336228debfee9c918ce505efe225d8c94d045fa115";
 
 const char* const SEED_NODES[] = { 
-  "136.243.158.27:32347",
+  "seed1.karbowanec.com:32347",
+  "seed2.karbowanec.com:32347",
   "95.46.98.64:32347",
   "52.21.253.162:32347",
   "46.149.182.151:32347"
