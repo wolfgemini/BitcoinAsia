@@ -1,5 +1,5 @@
 // Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
-// Copyright (c) 2016, The Karbowanec developers
+// Copyright (c) 2016-2017, The Karbowanec developers
 //
 // This file is part of Bytecoin.
 //
@@ -37,7 +37,6 @@ using namespace Logging;
 using namespace Common;
 
 namespace CryptoNote {
-
 	const std::vector<uint64_t> Currency::PRETTY_AMOUNTS = {
 		1, 2, 3, 4, 5, 6, 7, 8, 9,
 		10, 20, 30, 40, 50, 60, 70, 80, 90,
@@ -407,13 +406,12 @@ namespace CryptoNote {
 	difficulty_type Currency::nextDifficulty(uint8_t blockMajorVersion, std::vector<uint64_t> timestamps,
 		std::vector<difficulty_type> cumulativeDifficulties) const {
 
-		// new difficulty calculation
-		// based on Zawy difficulty algorithm v1.0
-		// next Diff = Avg past N Diff * TargetInterval / Avg past N solve times
-		// as described at https://github.com/monero-project/research-lab/issues/3
-		// Window time span and total difficulty is taken instead of average as suggested by Eugene
+		if (blockMajorVersion == BLOCK_MAJOR_VERSION_2) {
 
-		if (blockMajorVersion >= BLOCK_MAJOR_VERSION_2) {
+			// difficulty calculation based on Zawy difficulty algorithm v1
+			// next Diff = Avg past N Diff * TargetInterval / Avg past N solve times
+			// as described at https://github.com/monero-project/research-lab/issues/3
+			// Window time span and total difficulty is taken instead of average as suggested by Eugene
 
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
 			assert(m_difficultyWindow_2 >= 2);
@@ -442,7 +440,7 @@ namespace CryptoNote {
 
 			// uint64_t nextDiffZ = totalWork * m_difficultyTarget / timeSpan; 
 
- 			uint64_t low, high;
+			uint64_t low, high;
 			low = mul128(totalWork, m_difficultyTarget, &high);
 			// blockchain error "Difficulty overhead" if this function returns zero
 			if (high != 0) {
@@ -458,11 +456,133 @@ namespace CryptoNote {
 
 			return nextDiffZ;
 
-			// end of new difficulty calculation
+			// end of Zawy difficulty calculation v1
 
-		} else {
+		}
+		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
+			/*
+			// This is the improved difficulty algorithm v1b, author of the algorithm is zawy12
 
-			// old difficulty calculation
+			# Zawy v1b difficulty algorithm
+			# Based on next_diff = average(prev N diff) * TargetInterval / average(prev N solvetimes)
+			# Thanks to Karbowanec and Sumokoin for supporting, refining, testing, discussing, and using.
+			# Dinastycoin may be 3rd coin to use it, seeking protection that Cryptonote algo was not providing.
+			# Original impetus and discussion was at Zcash's modification of Digishield v3. The median method
+			# Zcash uses should be less accurate and should not be needed for timestamp error protection.
+			# Wider limits on difficulty changes provides more protection for small coins.
+			# Miners should be encouraged to keep accurate timestamps to help negate the effect of attacks.
+			# Large timestamp limits allows quick return after hash attack while preventing timestamp manipulation.
+			# The extent to which the TargetInterval is not the observed average is the extent to which
+			# the coin is being subjected to large sudden changes in hashrate.
+			# (1+0.693/N) keeps the avg solve time at TargetInterval.
+			# Low N has better response to short attacks, but wider variation in solvetime.
+			# With sudden large 5x on - off hashrate changes, N = 11 sometimes has
+			# 33x delays verses 16x delays with N = 17.
+			# For more info :
+			# https ://github.com/seredat/karbowanec/commit/231db5270acb2e673a641a1800be910ce345668a
+			#
+			# D = difficulty, T = TargetInterval, TS = timestamp, TSL = timestamp limit
+
+			N = 17;  # can possibly range from N = 4 to N>30.  N = 17 seems to be a good idea.
+			TSL = 10 if N>10 else TSL = N; # stops miner w / 50 % from lowering  D>25 % w / forward TS's.
+			current_TS = previous_TS + TSL*T if current_TS > previous_TS + TSL*T;
+			current_TS = previous_TS - (TSL - 1)*T if current_TS < previous_TS - (TSL - 1)*T;
+			next_D = sum(last N Ds) * T / [max(last N TSs) - min(last N TSs] / (1 + 0.693 / N);
+			next_D = previous_D*1.2 if next_D < 0;
+			next_D = 2 * previous_D  if next_D / previous_D > 2;
+			next_D = 0.5*previous_D  if next_D / previous_D < 0.5;
+			*/
+
+			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
+			assert(m_difficultyWindow_2 >= 2);
+
+			uint64_t TSL = 10;
+
+			if (timestamps.size() > m_difficultyWindow_2) {
+				timestamps.resize(m_difficultyWindow_2);
+			}
+			if (cumulativeDifficulties.size() > m_difficultyWindow_2) {
+				cumulativeDifficulties.resize(m_difficultyWindow_2);
+			}
+
+			size_t length = timestamps.size();
+			assert(length == cumulativeDifficprevious_Dulties.size());
+			assert(length <= m_difficultyWindow_2);
+			if (length <= 1) {
+				return 1;
+			}
+
+			sort(timestamps.begin(), timestamps.end());
+
+			uint64_t previous_TS = timestamps.end()[-2];
+			uint64_t current_TS = timestamps.back();
+
+			if (current_TS > (previous_TS + TSL * m_difficultyTarget)) {
+				current_TS = previous_TS + TSL * m_difficultyTarget;
+				timestamps.back() = current_TS;
+				logger(TRACE) << "Current timestamp max limit crossed! Correction to " << current_TS;
+			}
+
+			if (current_TS < (previous_TS - (TSL - 1) * m_difficultyTarget)) {
+				current_TS = previous_TS - (TSL - 1) * m_difficultyTarget;
+				timestamps.back() = current_TS;
+				logger(TRACE) << "Current timestamp min limit crossed! Correction to " << current_TS;
+			}
+
+			uint64_t timeSpan = timestamps.back() - timestamps.front();
+			if (timeSpan == 0) {
+				timeSpan = 1;
+			}
+
+			// we have cumulative difficulties, to find total work for window N we need to take from the
+			// cumulative difficulty at the end of the window the cumulative difficulty at the beginning of the window
+			difficulty_type totalWork = cumulativeDifficulties.back() - cumulativeDifficulties.front();
+			assert(totalWork > 0);
+
+			difficulty_type previous_D = cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2];
+
+			uint64_t low, high;
+			low = mul128(totalWork, m_difficultyTarget, &high);
+			// blockchain error "Difficulty overhead" if this function returns zero
+			if (high != 0) {
+				return 0;
+			}
+
+			uint64_t adjustmentFactor = static_cast<uint64_t>(1 + 0.693 / m_difficultyWindow_2);
+
+			uint64_t next_D = low / timeSpan / adjustmentFactor;
+
+			double compare = static_cast<double>(next_D) / static_cast<double>(previous_D);
+
+			if (next_D < 0) {
+				next_D = static_cast<uint64_t>(previous_D * 1.20);
+			}
+
+			if (compare > 2) {
+				//next_D = previous_D * 2;
+				uint64_t diff_low, diff_high;
+				diff_low = mul128(previous_D, 2, &diff_high);
+				if (diff_high != 0) {
+					return diff_low; // what should we return in this case?
+				}
+				next_D = diff_low;
+				logger(TRACE) << "Difficulty increases too rapidly, throttle down to double the previous: " << next_D;
+			}
+
+			if (compare < 0.5) {
+				next_D = previous_D / 2; // next_D = previous_D * 0.5;
+				logger(TRACE) << "Difficulty decreases too much, set half the previous: " << next_D;
+			}
+
+			if (next_D < 1) next_D = 1;
+			
+			return next_D;
+
+			// end of Zawy difficulty calculation v1b
+		}
+		else {
+
+			// default CryptoNote difficulty calculation
 
 			assert(m_difficultyWindow >= 2);
 
@@ -506,7 +626,7 @@ namespace CryptoNote {
 			}
 
 			return (low + timeSpan - 1) / timeSpan;
-			// end of old difficulty calculation  
+			// end of default Cryptonote difficulty calculation
 		}
 
 	}
