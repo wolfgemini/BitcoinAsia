@@ -506,7 +506,7 @@ namespace CryptoNote {
 			}
 
 			size_t length = timestamps.size();
-			assert(length == cumulativeDifficprevious_Dulties.size());
+			assert(length == cumulativeDifficulties.size());
 			assert(length <= m_difficultyWindow_2);
 			if (length <= 1) {
 				return 1;
