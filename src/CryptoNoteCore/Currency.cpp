@@ -512,8 +512,6 @@ namespace CryptoNote {
 				return 1;
 			}
 
-			sort(timestamps.begin(), timestamps.end());
-
 			uint64_t previous_TS = timestamps.end()[-2];
 			uint64_t current_TS = timestamps.back();
 
@@ -528,6 +526,8 @@ namespace CryptoNote {
 				timestamps.back() = current_TS;
 				logger(TRACE) << "Current timestamp min limit crossed! Correction to " << current_TS;
 			}
+
+			sort(timestamps.begin(), timestamps.end());
 
 			uint64_t timeSpan = timestamps.back() - timestamps.front();
 			if (timeSpan == 0) {
