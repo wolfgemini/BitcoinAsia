@@ -79,7 +79,14 @@ union cn_slow_hash_state {
 #endif
 
 struct cn_ctx {
-  ALIGNED_DECL(uint8_t long_state[MEMORY], 16);
+
+#ifndef FORCE_USE_HEAP
+	ALIGNED_DECL(uint8_t long_state[MEMORY], 16);
+#else
+    ALIGNED_DECL(uint8_t *long_state = NULL);
+    ALIGNED_DECL(long_state = (uint8_t *)malloc(MEMORY));
+#endif
+//  ALIGNED_DECL(uint8_t long_state[MEMORY], 16);  
   ALIGNED_DECL(union cn_slow_hash_state state, 16);
   ALIGNED_DECL(uint8_t text[INIT_SIZE_BYTE], 16);
   ALIGNED_DECL(uint64_t a[AES_BLOCK_SIZE >> 3], 16);

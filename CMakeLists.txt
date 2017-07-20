@@ -71,14 +71,74 @@ else()
   endif()
   set(C_WARNINGS "-Waggregate-return -Wnested-externs -Wold-style-definition -Wstrict-prototypes")
   set(CXX_WARNINGS "-Wno-reorder -Wno-missing-field-initializers")
+  
+  try_compile(STATIC_ASSERT_RES "${CMAKE_CURRENT_BINARY_DIR}/static-assert" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test-static-assert.c" COMPILE_DEFINITIONS "-std=c11")
+  if(STATIC_ASSERT_RES)
+    set(STATIC_ASSERT_FLAG "")
+  else()
+    set(STATIC_ASSERT_FLAG "-Dstatic_assert=_Static_assert")
+  endif()
+
+  try_compile(STATIC_ASSERT_CPP_RES "${CMAKE_CURRENT_BINARY_DIR}/static-assert" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test-static-assert.cpp" COMPILE_DEFINITIONS "-std=c++11")
+  if(STATIC_ASSERT_CPP_RES)
+    set(STATIC_ASSERT_CPP_FLAG "")
+  else()
+    set(STATIC_ASSERT_CPP_FLAG "-Dstatic_assert=_Static_assert")
+  endif()
+
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11 ${MINGW_FLAG} ${WARNINGS} ${C_WARNINGS} ${ARCH_FLAG} -maes")
+  
   if(NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ${MINGW_FLAG} ${WARNINGS} ${CXX_WARNINGS} ${ARCH_FLAG} -maes")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ${MINGW_FLAG} ${STATIC_ASSERT_CPP_FLAG} ${WARNINGS} ${CXX_WARNINGS} ${ARCH_FLAG} -maes")
   if(APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_HAS_TR1_TUPLE=0")
   endif()
+  
+  if(ANDROID AND NOT IOS)
+    #From Android 5: "only position independent executables (PIE) are supported" 
+    message(STATUS "Enabling PIE executable")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIE")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIE")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_CXX_FLAGS} -fPIE -pie")
+	
+	
+	# ARCH="armv7-a"
+	  if(CXX_ACCEPTS_VFP3_D16 AND NOT CXX_ACCEPTS_VFP4)
+        message(STATUS "Selecting VFP3 for ARMv7")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpu=vfp3-d16")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=vfp3-d16")
+      endif()
+
+      if(CXX_ACCEPTS_VFP4)
+        message(STATUS "Selecting VFP4 for ARMv7")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpu=vfp4")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=vfp4")
+      endif()
+
+      if(CXX_ACCEPTS_MFLOAT_HARD)
+        message(STATUS "Setting Hardware ABI for Floating Point")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=hard")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=hard")
+      endif()
+
+      if(CXX_ACCEPTS_MFLOAT_SOFTFP AND NOT CXX_ACCEPTS_MFLOAT_HARD)
+        message(STATUS "Setting Software ABI for Floating Point")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=softfp")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=softfp")
+      endif()
+	  
+	  
+  endif()
+  
+  # Because of the way Qt works on android with JNI, the code does not live in the main android thread
+  # So this code runs with a 1 MB default stack size. 
+  # This will force the use of the heap for the allocation of the scratchpad
+  if (ANDROID OR IOS)
+    add_definitions(-DFORCE_USE_HEAP=1)
+  endif()
+  
   if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND NOT (CMAKE_C_COMPILER_VERSION VERSION_LESS 4.8))
     set(DEBUG_FLAGS "-g3 -Og")
   else()

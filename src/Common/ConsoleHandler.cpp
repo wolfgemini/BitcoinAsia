@@ -83,7 +83,11 @@ void AsyncConsoleReader::consoleThread() {
 
 bool AsyncConsoleReader::waitInput() {
 #ifndef _WIN32
-  int stdin_fileno = ::fileno(stdin);
+  #if defined(__OpenBSD__) || defined(__ANDROID__)
+    int stdin_fileno = fileno(stdin);
+  #else
+    int stdin_fileno = ::fileno(stdin);
+  #endif
 
   while (!m_stop) {
     fd_set read_set;
