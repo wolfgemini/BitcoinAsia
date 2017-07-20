@@ -25,6 +25,7 @@
 // CryptoNote
 #include "Common/StringTools.h"
 #include "CryptoNoteCore/CryptoNoteTools.h"
+#include "CryptoNoteCore/CryptoNoteFormatUtils.h"
 #include "CryptoNoteCore/Core.h"
 #include "CryptoNoteCore/IBlock.h"
 #include "CryptoNoteCore/Miner.h"
@@ -866,7 +867,14 @@ bool RpcServer::on_getblocktemplate(const COMMAND_RPC_GETBLOCKTEMPLATE::request&
     res.reserved_offset = 0;
   }
 
+  BinaryArray hashing_blob;
+  if (!get_block_hashing_blob(b, hashing_blob)) {
+	  logger(ERROR) << "Failed to get blockhashing_blob";
+	  throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Internal error: failed to get blockhashing_blob" };
+  }
+
   res.blocktemplate_blob = toHex(block_blob);
+  res.blockhashing_blob = toHex(hashing_blob);
   res.status = CORE_RPC_STATUS_OK;
 
   return true;
