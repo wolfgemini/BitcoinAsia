@@ -31,6 +31,10 @@
 #include "TransactionExtra.h"
 #include "UpgradeDetector.h"
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+// or #define M_E 2.71828182845904523536
+
 #undef ERROR
 
 using namespace Logging;
@@ -407,13 +411,14 @@ namespace CryptoNote {
 	difficulty_type Currency::nextDifficulty(uint8_t blockMajorVersion, std::vector<uint64_t> timestamps,
 		std::vector<difficulty_type> cumulativeDifficulties) const {
 
-		// new difficulty calculation
+
+
+		if (blockMajorVersion == BLOCK_MAJOR_VERSION_2) {
+		// difficulty calculation z1
 		// based on Zawy difficulty algorithm v1.0
 		// next Diff = Avg past N Diff * TargetInterval / Avg past N solve times
 		// as described at https://github.com/monero-project/research-lab/issues/3
 		// Window time span and total difficulty is taken instead of average as suggested by Eugene
-
-		if (blockMajorVersion >= BLOCK_MAJOR_VERSION_2) {
 
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
 			assert(m_difficultyWindow_2 >= 2);
@@ -460,7 +465,52 @@ namespace CryptoNote {
 
 			// end of new difficulty calculation
 
-		} else {
+		}
+		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
+		/* z3
+		# zawy v3 tentative idea, new averaging method
+		# next_D = T * avg(linearly mapped D / T) instead of next_D = T * avg(D) / avg(T)
+		ST = SolveTime; T = TargetInterval
+		map = map_ST_to_a_linear_function = 4 * (1 - e ^ (-ST / T)) * e ^ (-ST / T))
+		unmap = 0.625
+		next_D = T * unmap * avg(N previous D / ST  * map)
+		*/
+			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
+			assert(m_difficultyWindow_2 >= 2);
+
+			if (timestamps.size() > m_difficultyWindow_2) {
+				timestamps.resize(m_difficultyWindow_2);
+				cumulativeDifficulties.resize(m_difficultyWindow_2);
+			}
+
+			size_t length = timestamps.size();
+			assert(length == cumulativeDifficulties.size());
+			assert(length <= m_difficultyWindow_2);
+			if (length <= 1) {
+				return 1;
+			}
+			sort(timestamps.begin(), timestamps.end());
+			uint64_t timeSpan = timestamps.back() - timestamps.front();
+			if (timeSpan == 0) {
+				timeSpan = 1;
+			}
+			difficulty_type totalWork = cumulativeDifficulties.back() - cumulativeDifficulties.front();
+			assert(totalWork > 0);
+
+			double T = static_cast<double>(m_difficultyTarget);
+			double ST = static_cast<double>(timeSpan);
+			double ND = static_cast<double>(totalWork);
+			double unmap = 0.625; // we use M_LN2 instead
+			double map = 4 * (1 - exp(-ST / T)) * exp(-ST / T); // linear function 4*(1-e^x)*e^x
+			
+			uint64_t next_D = static_cast<uint64_t>(T * M_LN2 * (ND / ST  * map));
+			if (next_D < 1)
+				next_D = 1;
+			
+			return next_D;
+			
+		}
+		else {
 
 			// old difficulty calculation
 
