@@ -469,12 +469,18 @@ namespace CryptoNote {
 		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
 		/* z3
 		# zawy v3 tentative idea, new averaging method
-		# next_D = T * avg(linearly mapped D / T) instead of next_D = T * avg(D) / avg(T)
-		ST = SolveTime; T = TargetInterval
-		map = map_ST_to_a_linear_function = 4 * (1 - e ^ (-ST / T)) * e ^ (-ST / T))
+		# zawy v3 tentative idea, clarifying
+		# next_D = T * avg(linearly mapped D/T) instead of next_D = T * avg(D) / avg(T)
+		ST = SolveTime; T=TargetInterval
 		unmap = 0.625
-		next_D = T * unmap * avg(N previous D / ST  * map)
+		if ST < 1 then ST = 1
+		totalHashrate=0
+		for i=1 to N
+		totalHashrate = totalHashrate + D[i]/ST[i] * 4 * (1-e^(-ST[i]/T)) * e^(-ST[i]/T))
+		next i
+		next_D = T * unmap * totalHashrate / N
 		*/
+
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
 			assert(m_difficultyWindow_2 >= 2);
 
@@ -485,28 +491,98 @@ namespace CryptoNote {
 
 			size_t length = timestamps.size();
 			assert(length == cumulativeDifficulties.size());
-			assert(length <= m_difficultyWindow_2);
+			if (length > m_difficultyWindow_2)
+				length = m_difficultyWindow_2;
+
 			if (length <= 1) {
 				return 1;
 			}
-			sort(timestamps.begin(), timestamps.end());
-			uint64_t timeSpan = timestamps.back() - timestamps.front();
-			if (timeSpan == 0) {
-				timeSpan = 1;
-			}
+			//sort(timestamps.begin(), timestamps.end());
+
 			difficulty_type totalWork = cumulativeDifficulties.back() - cumulativeDifficulties.front();
 			assert(totalWork > 0);
 
-			double T = static_cast<double>(m_difficultyTarget);
-			double ST = static_cast<double>(timeSpan);
-			double ND = static_cast<double>(totalWork);
+			difficulty_type previous_D = cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2];
+			uint64_t next_D;
+
 			double unmap = 0.625; // we use M_LN2 instead
-			double map = 4 * (1 - exp(-ST / T)) * exp(-ST / T); // linear function 4*(1-e^x)*e^x
-			
-			uint64_t next_D = static_cast<uint64_t>(T * M_LN2 * (ND / ST  * map));
+			double T = static_cast<double>(m_difficultyTarget);
+			std::vector<double> Hashrates;
+			std::vector<double> solveTimes;
+
+			for (size_t i = 0; i < length - 1; i++){
+				double SolveTime = timestamps[i + 1] - timestamps[i];
+				solveTimes.push_back(SolveTime);
+			}
+
+			// Ignore most recent ST if it's < 0.
+			double prevSolveTime = solveTimes.end()[-2];
+			double currentSolveTime = solveTimes.back();
+			double firstSolveTime = solveTimes.front();
+
+			if (currentSolveTime < 0)
+				return previous_D;
+
+			// note: if ST = 0.0001 it is OK because it is about the same as ST = 3 due to the mapping.
+
+			//  If ST[1] was negative in last block, now it is ST[2] < 0.  Either ST[2] time was
+			//  early, or ST[3] was late.We do not know which so we average 1, 2, and 3.
+
+			if (prevSolveTime < 0) {
+				if (solveTimes.end()[-3] > 0) // it's possible both ST[2] and ST[3] were negative.
+				{
+					double temp_ST = (solveTimes.end()[-3] + solveTimes.end()[-2] + solveTimes.back()) / 3;
+					if (temp_ST < 0)
+						return previous_D; // error
+
+					solveTimes.end()[-3] = temp_ST;
+					solveTimes.end()[-2] = temp_ST;
+					solveTimes.back() = temp_ST;
+
+				}
+				else //  ST[2] and ST[3] were both < 0
+				{
+					// We don't know if ST[2] and ST[3] were early or if ST[4] and/or ST[5] were late.  
+					// Best and safest thing is to make them median ST
+					//temp_ST_median = median(ST[1] to ST[N])
+
+					double temp_ST_median;
+					if (solveTimes.size() % 2 == 0) // even
+						temp_ST_median = (solveTimes[solveTimes.size() / 2 - 1] + solveTimes[solveTimes.size() / 2]) / 2;
+					else // odd
+						temp_ST_median = solveTimes[solveTimes.size() / 2];
+					if (temp_ST_median < 0)
+						return previous_D; // error
+
+					solveTimes.end()[-3] = temp_ST_median;
+					solveTimes.end()[-2] = temp_ST_median;
+				}
+			}
+
+			std::reverse(solveTimes.begin(), solveTimes.end());
+			for (size_t i = 0; i < length - 1; i++){
+				double D = static_cast<double>(cumulativeDifficulties[i + 1] - cumulativeDifficulties[i]);
+				logger(TRACE, YELLOW) << "D: " << D;
+				double ST = solveTimes[i];
+				logger(TRACE, YELLOW) << "ST: " << ST;
+				double Hashrate = D / ST * 4 * (1 - exp(-ST / T)) * exp(-ST / T);
+				logger(TRACE, YELLOW) << "Hashrate: " << Hashrate;
+				Hashrates.push_back(Hashrate);
+			}
+			logger(TRACE) << "N: " << Hashrates.size();
+
+
+			double totalHashrate = std::accumulate(Hashrates.begin(), Hashrates.end(), 0.0) / Hashrates.size(); // totalHashrate / N
+			double nextD = T * M_LN2 * totalHashrate;
+			logger(TRACE) << "nextD: " << nextD;
+
+			next_D = static_cast<uint64_t>(nextD);
+
 			if (next_D < 1)
 				next_D = 1;
-			
+
+			logger(INFO) << "Next D: " << next_D << "\n";
+
 			return next_D;
 			
 		}
