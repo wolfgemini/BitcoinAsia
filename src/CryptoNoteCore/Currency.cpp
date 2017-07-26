@@ -18,6 +18,7 @@
 
 #include "Currency.h"
 #include <cctype>
+#include <numeric>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/lexical_cast.hpp>
 #include "../Common/Base58.h"
@@ -559,7 +560,7 @@ namespace CryptoNote {
 				}
 			}
 
-			std::reverse(solveTimes.begin(), solveTimes.end());
+			//std::reverse(solveTimes.begin(), solveTimes.end());
 			for (size_t i = 0; i < length - 1; i++){
 				double D = static_cast<double>(cumulativeDifficulties[i + 1] - cumulativeDifficulties[i]);
 				logger(TRACE, YELLOW) << "D: " << D;
