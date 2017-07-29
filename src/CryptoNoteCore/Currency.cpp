@@ -496,7 +496,6 @@ namespace CryptoNote {
 			}
 			//sort(timestamps.begin(), timestamps.end()); // we don't sort timestamps!
 
-			difficulty_type previous_D = cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2];
 			uint64_t next_D;
 
 			double unmap = 0.625; // we use M_LN2 instead
@@ -509,26 +508,22 @@ namespace CryptoNote {
 				solveTimes.push_back(SolveTime);
 			}
 
-			double prevSolveTime = solveTimes.end()[-2];
-			double currentSolveTime = solveTimes.back();
-			double firstSolveTime = solveTimes.front();
-
 			// Eliminate negative ST before the mapping loop above.
 			// N = number of block going in reverse.N = 1 is previous block.
 			// The following ST changes are permanent.
 
 			// Ignore most recent ST if it's < 0.
-			if (currentSolveTime < 0) {
-				if (currentSolveTime + prevSolveTime > 0) {
-					currentSolveTime = (currentSolveTime + prevSolveTime) / 2;
-					prevSolveTime = currentSolveTime;
+			if (solveTimes.back() < 0) {
+				if (solveTimes.back() + solveTimes.end()[-2] > 0) {
+					solveTimes.back() = (solveTimes.back() + solveTimes.end()[-2]) / 2;
+					solveTimes.end()[-2] = solveTimes.back();
 				}
 				else {
-					return previous_D; // exit / return completely....get out of next_D routine
+					return cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2]; // exit / return completely....get out of next_D routine
 				}
 			}
 
-			if (prevSolveTime < 0) //  ST[1}+ST[2] in the previous block was negative. The previous ST[1] is now ST[2]
+			if (solveTimes.end()[-2] < 0) //  ST[1}+ST[2] in the previous block was negative. The previous ST[1] is now ST[2]
 			{
 				if ((solveTimes.back() + solveTimes.end()[-2] + solveTimes.end()[-3]) > 0) {
 					double temp_ST = (solveTimes.end()[-3] + solveTimes.end()[-2] + solveTimes.back()) / 3;
