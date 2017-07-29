@@ -18,6 +18,7 @@
 
 #include "Currency.h"
 #include <cctype>
+#include <numeric>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/lexical_cast.hpp>
 #include "../Common/Base58.h"
@@ -460,43 +461,17 @@ namespace CryptoNote {
 
 		}
 		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
-			/*
-			// This is the improved difficulty algorithm v1b, author of the algorithm is zawy12
-
-			# Zawy v1b difficulty algorithm
-			# Based on next_diff = average(prev N diff) * TargetInterval / average(prev N solvetimes)
-			# Thanks to Karbowanec and Sumokoin for supporting, refining, testing, discussing, and using.
-			# Dinastycoin may be 3rd coin to use it, seeking protection that Cryptonote algo was not providing.
-			# Original impetus and discussion was at Zcash's modification of Digishield v3. The median method
-			# Zcash uses should be less accurate and should not be needed for timestamp error protection.
-			# Wider limits on difficulty changes provides more protection for small coins.
-			# Miners should be encouraged to keep accurate timestamps to help negate the effect of attacks.
-			# Large timestamp limits allows quick return after hash attack while preventing timestamp manipulation.
-			# The extent to which the TargetInterval is not the observed average is the extent to which
-			# the coin is being subjected to large sudden changes in hashrate.
-			# (1+0.693/N) keeps the avg solve time at TargetInterval.
-			# Low N has better response to short attacks, but wider variation in solvetime.
-			# With sudden large 5x on - off hashrate changes, N = 11 sometimes has
-			# 33x delays verses 16x delays with N = 17.
-			# For more info :
-			# https ://github.com/seredat/karbowanec/commit/231db5270acb2e673a641a1800be910ce345668a
-			#
-			# D = difficulty, T = TargetInterval, TS = timestamp, TSL = timestamp limit
-
-			N = 17;  # can possibly range from N = 4 to N>30.  N = 17 seems to be a good idea.
-			TSL = 10 if N>10 else TSL = N; # stops miner w / 50 % from lowering  D>25 % w / forward TS's.
-			current_TS = previous_TS + TSL*T if current_TS > previous_TS + TSL*T;
-			current_TS = previous_TS - (TSL - 1)*T if current_TS < previous_TS - (TSL - 1)*T;
-			next_D = sum(last N Ds) * T / [max(last N TSs) - min(last N TSs] / (1 + 0.693 / N);
-			next_D = previous_D*1.2 if next_D < 0;
-			next_D = 2 * previous_D  if next_D / previous_D > 2;
-			next_D = 0.5*previous_D  if next_D / previous_D < 0.5;
+			
+			/* Zawy v1c
+			# Difference from v1b: replaces TimeStamp (TS) limit & removes next_D rise and fall limits.
+			N=17;  k = 0.94;  # k = adjustment for N=17 so that ST=1 for constant hashrate
+			# N=8; k=0.92;   # use this instead if hash attacks are still a problem.
+			&correct_negative_timestamp  # see above. This may prevent the next line from executing (pseudocode error)
+			next_D = k * sum(last N Ds) * T / [max(last N TSs) - min(last N TSs]
 			*/
 
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
 			assert(m_difficultyWindow_2 >= 2);
-
-			uint64_t TSL = 10;
 
 			if (timestamps.size() > m_difficultyWindow_2) {
 				timestamps.resize(m_difficultyWindow_2);
@@ -511,74 +486,76 @@ namespace CryptoNote {
 			if (length <= 1) {
 				return 1;
 			}
+	
+			uint64_t next_D;
+			double unmap = 0.625; // we use M_LN2 instead
+			double T = static_cast<double>(m_difficultyTarget);
+			std::vector<double> Hashrates;
+			std::vector<double> solveTimes;
 
-			uint64_t previous_TS = timestamps.end()[-2];
-			uint64_t current_TS = timestamps.back();
-
-			if (current_TS > (previous_TS + TSL * m_difficultyTarget)) {
-				current_TS = previous_TS + TSL * m_difficultyTarget;
-				timestamps.back() = current_TS;
-				logger(TRACE) << "Current timestamp max limit crossed! Correction to " << current_TS;
+			for (size_t i = 0; i < length - 1; i++){
+				double SolveTime = timestamps[i + 1] - timestamps[i];
+				solveTimes.push_back(SolveTime);
 			}
 
-			if (current_TS < (previous_TS - (TSL - 1) * m_difficultyTarget)) {
-				current_TS = previous_TS - (TSL - 1) * m_difficultyTarget;
-				timestamps.back() = current_TS;
-				logger(TRACE) << "Current timestamp min limit crossed! Correction to " << current_TS;
-			}
+			double prevSolveTime = solveTimes.end()[-2];
+			double currentSolveTime = solveTimes.back();
+			double firstSolveTime = solveTimes.front();
 
-			sort(timestamps.begin(), timestamps.end());
+			// Eliminate negative ST before the mapping loop above.
+			// N = number of block going in reverse.N = 1 is previous block.
+			// The following ST changes are permanent.
 
-			uint64_t timeSpan = timestamps.back() - timestamps.front();
-			if (timeSpan == 0) {
-				timeSpan = 1;
-			}
-
-			// we have cumulative difficulties, to find total work for window N we need to take from the
-			// cumulative difficulty at the end of the window the cumulative difficulty at the beginning of the window
-			difficulty_type totalWork = cumulativeDifficulties.back() - cumulativeDifficulties.front();
-			assert(totalWork > 0);
-
-			difficulty_type previous_D = cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2];
-
-			uint64_t low, high;
-			low = mul128(totalWork, m_difficultyTarget, &high);
-			// blockchain error "Difficulty overhead" if this function returns zero
-			if (high != 0) {
-				return 0;
-			}
-
-			uint64_t adjustmentFactor = static_cast<uint64_t>(1 + 0.693 / m_difficultyWindow_2);
-
-			uint64_t next_D = low / timeSpan / adjustmentFactor;
-
-			double compare = static_cast<double>(next_D) / static_cast<double>(previous_D);
-
-			if (next_D < 0) {
-				next_D = static_cast<uint64_t>(previous_D * 1.20);
-			}
-
-			if (compare > 2) {
-				//next_D = previous_D * 2;
-				uint64_t diff_low, diff_high;
-				diff_low = mul128(previous_D, 2, &diff_high);
-				if (diff_high != 0) {
-					return diff_low; // what should we return in this case?
+			// Ignore most recent ST if it's < 0.
+			if (solveTimes.back() < 0) {
+				if (solveTimes.back() + solveTimes.end()[-2] > 0) {
+					solveTimes.back() = (solveTimes.back() + solveTimes.end()[-2]) / 2;
+					solveTimes.end()[-2] = solveTimes.back();
 				}
-				next_D = diff_low;
-				logger(TRACE) << "Difficulty increases too rapidly, throttle down to double the previous: " << next_D;
+				else {
+					return cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2]; // exit / return completely....get out of next_D routine
+				}
 			}
 
-			if (compare < 0.5) {
-				next_D = previous_D / 2; // next_D = previous_D * 0.5;
-				logger(TRACE) << "Difficulty decreases too much, set half the previous: " << next_D;
+			if (solveTimes.end()[-2] < 0) //  ST[1}+ST[2] in the previous block was negative. The previous ST[1] is now ST[2]
+			{
+				if ((solveTimes.back() + solveTimes.end()[-2] + solveTimes.end()[-3]) > 0) {
+					double temp_ST = (solveTimes.end()[-3] + solveTimes.end()[-2] + solveTimes.back()) / 3;
+					solveTimes.end()[-3] = temp_ST;
+					solveTimes.end()[-2] = temp_ST;
+					solveTimes.back() = temp_ST;
+				}
+				else {
+					// there were 2 or 3 negative timestamps in a row.
+					// We don't know if ST[2] and ST[3] were early or if ST[4] and/or ST[5] were late.  
+					// Best and safest thing is to make them median ST
+					double temp_ST_median;
+					if (solveTimes.size() % 2 == 0) // even
+						temp_ST_median = (solveTimes[solveTimes.size() / 2 - 1] + solveTimes[solveTimes.size() / 2]) / 2;
+					else // odd
+						temp_ST_median = solveTimes[solveTimes.size() / 2];
+
+					solveTimes.end()[-2] = temp_ST_median;
+					solveTimes.end()[-3] = temp_ST_median;
+				}
 			}
 
-			if (next_D < 1) next_D = 1;
-			
+			double k = 0.94;
+			double Ds = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.front()); // cumulative diff for window N = 16 without FIRST block, not last, this is actually correct
+
+			assert(Ds > 0);
+			double ST = std::accumulate(solveTimes.begin(), solveTimes.end(), 0.0); // instead of [max(last N TSs) - min(last N TSs] since we use corrected timespans instead of timestamps
+			if (ST == 0) {
+				ST = 1;
+			}
+			double nextD = k * Ds * T / ST;
+
+			next_D = static_cast<uint64_t>(nextD);
+			if (next_D < 1)
+				next_D = 1;
+
 			return next_D;
 
-			// end of Zawy difficulty calculation v1b
 		}
 		else {
 
