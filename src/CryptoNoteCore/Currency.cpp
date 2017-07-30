@@ -484,7 +484,6 @@ namespace CryptoNote {
 			double nextD;
 			double unmap = 0.625;
 			double T = static_cast<double>(m_difficultyTarget);
-			std::vector<double> Hashrates;
 			std::vector<double> solveTimes;
 
 			if (timestamps.size() > m_difficultyWindow_2) {
@@ -507,13 +506,13 @@ namespace CryptoNote {
 				solveTimes.push_back(SolveTime);
 			}
 
+			// Eliminate negative ST anywhere in the window replacing it with mean solve time
 			double ST_median;
 			if (solveTimes.size() % 2 == 0) // even
 				ST_median = (solveTimes[solveTimes.size() / 2 - 1] + solveTimes[solveTimes.size() / 2]) / 2;
 			else // odd
 				ST_median = solveTimes[solveTimes.size() / 2];
 
-			// Eliminate negative ST anywhere in the window replacing it with mean solve time
 			for (size_t i = 0; i < length - 1; i++){
 				if (solveTimes[i] <= 0) {
 					if (ST_median > 1) {
@@ -525,17 +524,36 @@ namespace CryptoNote {
 				}
 			}
 
-			for (size_t i = 0; i < length - 1; i++){
-				double D = static_cast<double>(cumulativeDifficulties[i + 1] - cumulativeDifficulties[i]);
-				double ST = solveTimes[i];
-				double Hashrate = D / ST * 4 * (1 - exp(-ST / T)) * exp(-ST / T);
-				Hashrates.push_back(Hashrate);
-			}
-			double totalHashrate = std::accumulate(Hashrates.begin(), Hashrates.end(), 0.0) / Hashrates.size(); // totalHashrate / N
-			nextD = T * unmap * totalHashrate; // or M_LN2 instead of unmap
-			
-			next_D = static_cast<uint64_t>(nextD);
+			// check to see if last M blocks were dropping significantly fast.
+			// IF past N / 2 ST's are > 2.5 std devs too long (after an attack)
+			// THEN use v1b for N / 2 blocks:  next_D = T * avg(N / 2 of D) / avg(N / 2 of ST) / (1 + 0.69 / (N / 2))
+			double M = int((length - 1) / 2);
+			double mSolveTime = std::accumulate(solveTimes.begin(), solveTimes.end(), 0.0); // Sum(last  M ST's)
+			double mExpected = mSolveTime / T;
+			double mDs = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-M]); // sum(last M Ds)
+			double std_dev = (M - mExpected) / sqrt(mExpected);
 
+			if (std_dev > 2.1 /*|| wait > 0*/) {
+				nextD = mDs * T / mSolveTime / (1 + 0.69 / M);
+				//if (wait == 0) then(wait = M) else (wait = wait - 1)
+				logger(TRACE) << "Last blocks were dropping significantly fast, raising difficulty: " << static_cast<uint64_t>(nextD);
+
+			}
+			else {
+				double Hashrate = 0;
+				double N = int((length - 1));
+				double sumNs = N / 2 * (N + 1);
+
+				for (size_t i = 0; i < N; i++){
+					double D = static_cast<double>(cumulativeDifficulties[i + 1] - cumulativeDifficulties[i]);
+					double ST = solveTimes[i];
+					Hashrate += D / ST * 4 * (1 - exp(-ST / T)) * exp(-ST / T) * (N + 1 - i) / sumNs;
+				}
+
+				nextD = T * unmap * Hashrate; // or M_LN2 instead unmap
+			}
+
+			next_D = static_cast<uint64_t>(nextD);
 			if (next_D < 1)
 				next_D = 1;
 
