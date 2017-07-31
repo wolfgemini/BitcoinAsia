@@ -507,16 +507,12 @@ namespace CryptoNote {
 			}
 
 			// Eliminate negative ST anywhere in the window replacing it with mean solve time
-			double ST_median;
-			if (solveTimes.size() % 2 == 0) // even
-				ST_median = (solveTimes[solveTimes.size() / 2 - 1] + solveTimes[solveTimes.size() / 2]) / 2;
-			else // odd
-				ST_median = solveTimes[solveTimes.size() / 2];
+			double averageSolveTime = accumulate(solveTimes.begin(), solveTimes.end(), 0.0) / solveTimes.size();
 
 			for (size_t i = 0; i < length - 1; i++){
 				if (solveTimes[i] <= 0) {
-					if (ST_median > 1) {
-						solveTimes[i] = ST_median;
+					if (averageSolveTime > 1) {
+						solveTimes[i] = averageSolveTime;
 					}
 					else {
 						solveTimes[i] = 1; // maybe put here T
@@ -533,9 +529,12 @@ namespace CryptoNote {
 			double mDs = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-M]); // sum(last M Ds)
 			double std_dev = (M - mExpected) / sqrt(mExpected);
 
-			if (std_dev > 2.1 /*|| wait > 0*/) {
+			if (std_dev > 2.1 /*|| Wait > 0*/) {
 				nextD = mDs * T / mSolveTime / (1 + 0.69 / M);
-				//if (wait == 0) then(wait = M) else (wait = wait - 1)
+				/*if (Wait == 0)
+					Wait = M;
+				else
+					Wait = Wait - 1;*/				
 				logger(TRACE) << "Last blocks were dropping significantly fast, raising difficulty: " << static_cast<uint64_t>(nextD);
 
 			}
