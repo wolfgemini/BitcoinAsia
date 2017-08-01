@@ -18,6 +18,7 @@
 
 #include "Currency.h"
 #include <cctype>
+#include <numeric>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/lexical_cast.hpp>
 #include "../Common/Base58.h"
@@ -407,13 +408,12 @@ namespace CryptoNote {
 	difficulty_type Currency::nextDifficulty(uint8_t blockMajorVersion, std::vector<uint64_t> timestamps,
 		std::vector<difficulty_type> cumulativeDifficulties) const {
 
-		// new difficulty calculation
-		// based on Zawy difficulty algorithm v1.0
-		// next Diff = Avg past N Diff * TargetInterval / Avg past N solve times
-		// as described at https://github.com/monero-project/research-lab/issues/3
-		// Window time span and total difficulty is taken instead of average as suggested by Eugene
+		if (blockMajorVersion == BLOCK_MAJOR_VERSION_2) {
 
-		if (blockMajorVersion >= BLOCK_MAJOR_VERSION_2) {
+			// difficulty calculation based on Zawy difficulty algorithm v1.0
+			// next Diff = Avg past N Diff * TargetInterval / Avg past N solve times
+			// as described at https://github.com/monero-project/research-lab/issues/3
+			// Window time span and total difficulty is taken instead of average as suggested by Eugene
 
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
 			assert(m_difficultyWindow_2 >= 2);
@@ -442,7 +442,7 @@ namespace CryptoNote {
 
 			// uint64_t nextDiffZ = totalWork * m_difficultyTarget / timeSpan; 
 
- 			uint64_t low, high;
+			uint64_t low, high;
 			low = mul128(totalWork, m_difficultyTarget, &high);
 			// blockchain error "Difficulty overhead" if this function returns zero
 			if (high != 0) {
@@ -460,9 +460,85 @@ namespace CryptoNote {
 
 			// end of new difficulty calculation
 
-		} else {
+		}
+		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
 
-			// old difficulty calculation
+			// zawy v1d
+			// For more info:
+			// https://github.com/seredat/karbowanec/commit/231db5270acb2e673a641a1800be910ce345668a
+
+			// Similar to the idea used in v3c but applied to the simple average.
+			// Does not require "wait" variable or the code that "triggers" to a shorter window.
+			// Same as v1c except average next_D based on N, N/2, and N/4 instead of just N.
+			// N should not be changed
+
+			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
+			assert(m_difficultyWindow_2 >= 2);
+
+			if (timestamps.size() > m_difficultyWindow_2) {
+				timestamps.resize(m_difficultyWindow_2);
+			}
+			if (cumulativeDifficulties.size() > m_difficultyWindow_2) {
+				cumulativeDifficulties.resize(m_difficultyWindow_2);
+			}
+
+			size_t length = timestamps.size();
+			assert(length == cumulativeDifficulties.size());
+			assert(length <= m_difficultyWindow_2);
+			if (length <= 1) {
+				return 1;
+			}
+
+			uint64_t next_D;
+			double T = static_cast<double>(m_difficultyTarget);
+			double N = int(length - 1);
+			double M = int(N / 2);
+			double O = int(N / 4);
+			double k = 0.85; // adjustment to keep avg solvetime correct when hash rate is constant
+
+			std::vector<double> solveTimes;
+			for (size_t i = 0; i < N; i++){
+				double SolveTime = static_cast<double>(timestamps[i + 1]) - static_cast<double>(timestamps[i]);
+				solveTimes.push_back(SolveTime);
+			}
+
+			// Correct negative timestamps anywhere in the Difficulty window replacing them with average solve time
+			double averageSolveTime = accumulate(solveTimes.begin(), solveTimes.end(), 0.0) / solveTimes.size();
+			for (size_t i = 0; i < N; i++){
+				if (solveTimes[i] <= 0) {
+					if (averageSolveTime > 1) {
+						solveTimes[i] = averageSolveTime;
+					}
+					else {
+						solveTimes[i] = 1;
+					}
+
+				}
+			}
+
+			double N_cumulativeDifficulties = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.front());
+			double M_cumulativeDifficulties = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-M]);
+			double O_cumulativeDifficulties = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-O]);
+
+			double N_solveTimes = static_cast<double>(std::accumulate(solveTimes.begin(), solveTimes.end(), 0.0));
+			double M_solveTimes = static_cast<double>(std::accumulate(solveTimes.end() - M, solveTimes.end(), 0.0));
+			double O_solveTimes = static_cast<double>(std::accumulate(solveTimes.end() - O, solveTimes.end(), 0.0));
+
+			double N_difficulty = k * N_cumulativeDifficulties * T / N_solveTimes;
+			double M_difficulty = k * M_cumulativeDifficulties * T / M_solveTimes;
+			double O_difficulty = k * O_cumulativeDifficulties * T / O_solveTimes;
+
+			double nextD = (N_difficulty + M_difficulty + O_difficulty) / 3;
+			next_D = static_cast<uint64_t>(nextD);
+			if (next_D < 1)
+				next_D = 1;
+
+			return next_D;
+
+		}
+		else {
+
+			// default CryptoNote difficulty calculation
 
 			assert(m_difficultyWindow >= 2);
 
