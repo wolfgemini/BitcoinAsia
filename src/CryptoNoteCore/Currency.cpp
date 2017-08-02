@@ -463,14 +463,10 @@ namespace CryptoNote {
 		}
 		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
 
-			// zawy v1d
-			// For more info:
-			// https://github.com/seredat/karbowanec/commit/231db5270acb2e673a641a1800be910ce345668a
-
+			// zawy v1c 
+			// v1c = v1b with avg of 3 different averaging windows. Higher weight to most recent blocks.
+			// For more info: https://github.com/seredat/karbowanec/commit/231db5270acb2e673a641a1800be910ce345668a
 			// Similar to the idea used in v3c but applied to the simple average.
-			// Does not require "wait" variable or the code that "triggers" to a shorter window.
-			// Same as v1c except average next_D based on N, N/2, and N/4 instead of just N.
-			// N should not be changed
 
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
 			assert(m_difficultyWindow_2 >= 2);
@@ -495,34 +491,42 @@ namespace CryptoNote {
 			double M = int(N / 2);
 			double O = int(N / 4);
 			double k = 0.85; // adjustment to keep avg solvetime correct when hash rate is constant
-
+			
 			std::vector<double> solveTimes;
+			uint64_t TSL = 9; // timestamp limit, timestamp should be < 9xT and > -8xT
 			for (size_t i = 0; i < N; i++){
+				if (timestamps[i] >(timestamps[i + 1] + TSL * T)) {
+					timestamps[i] = timestamps[i + 1] + TSL * T;
+					logger(TRACE) << "Timestamp max limit crossed! Correcting to " << timestamps[i];
+				}
+				if (timestamps[i] < (timestamps[i + 1] - (TSL - 1) * T)) {
+					timestamps[i] = timestamps[i + 1] - (TSL - 1) * T;
+					logger(TRACE) << "Timestamp min limit crossed! Correcting to " << timestamps[i];
+				}
 				double SolveTime = static_cast<double>(timestamps[i + 1]) - static_cast<double>(timestamps[i]);
 				solveTimes.push_back(SolveTime);
 			}
 
-			// Correct negative timestamps anywhere in the Difficulty window replacing them with average solve time
-			double averageSolveTime = accumulate(solveTimes.begin(), solveTimes.end(), 0.0) / solveTimes.size();
-			for (size_t i = 0; i < N; i++){
-				if (solveTimes[i] <= 0) {
-					if (averageSolveTime > 1) {
-						solveTimes[i] = averageSolveTime;
-					}
-					else {
-						solveTimes[i] = 1;
-					}
-
-				}
-			}
+			if (solveTimes.front() < 0)
+				solveTimes.front() *= -1;
+			if (solveTimes[M] < 0)
+				solveTimes[M] *= -1;
+			if (solveTimes[N - O] < 0)
+				solveTimes[N - O] *= -1;
 
 			double N_cumulativeDifficulties = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.front());
 			double M_cumulativeDifficulties = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-M]);
 			double O_cumulativeDifficulties = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-O]);
 
 			double N_solveTimes = static_cast<double>(std::accumulate(solveTimes.begin(), solveTimes.end(), 0.0));
+			   if (N_solveTimes <= 0)
+				   N_solveTimes *= -1;
 			double M_solveTimes = static_cast<double>(std::accumulate(solveTimes.end() - M, solveTimes.end(), 0.0));
+			   if (M_solveTimes <= 0)
+				   M_solveTimes *= -1;
 			double O_solveTimes = static_cast<double>(std::accumulate(solveTimes.end() - O, solveTimes.end(), 0.0));
+			   if (O_solveTimes <= 0)
+				   O_solveTimes *= -1;
 
 			double N_difficulty = k * N_cumulativeDifficulties * T / N_solveTimes;
 			double M_difficulty = k * M_cumulativeDifficulties * T / M_solveTimes;
