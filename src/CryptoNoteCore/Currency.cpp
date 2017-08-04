@@ -34,7 +34,6 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
-// or #define M_E 2.71828182845904523536
 
 #undef ERROR
 
@@ -506,7 +505,7 @@ namespace CryptoNote {
 				solveTimes.push_back(SolveTime);
 			}
 
-			// Eliminate negative ST anywhere in the window replacing it with mean solve time
+			// Eliminate negative ST anywhere in the window replacing it with average solve time
 			double averageSolveTime = accumulate(solveTimes.begin(), solveTimes.end(), 0.0) / solveTimes.size();
 
 			for (size_t i = 0; i < length - 1; i++){
@@ -520,7 +519,6 @@ namespace CryptoNote {
 				}
 			}
 
-			// check to see if last M blocks were dropping significantly fast.
 			// IF past N / 2 ST's are > 2.5 std devs too long (after an attack)
 			// THEN use v1b for N / 2 blocks:  next_D = T * avg(N / 2 of D) / avg(N / 2 of ST) / (1 + 0.69 / (N / 2))
 			double M = int((length - 1) / 2);
@@ -529,7 +527,7 @@ namespace CryptoNote {
 			double mDs = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.end()[-M]); // sum(last M Ds)
 			double std_dev = (M - mExpected) / sqrt(mExpected);
 
-			if (std_dev > 2.1 /*|| Wait > 0*/) {
+			if (std_dev < -2.1 /*|| Wait > 0*/) {
 				nextD = mDs * T / mSolveTime / (1 + 0.69 / M);
 				/*if (Wait == 0)
 					Wait = M;
