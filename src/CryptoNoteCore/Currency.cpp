@@ -462,12 +462,8 @@ namespace CryptoNote {
 		}
 		else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_3) {
 			
-			/* Zawy v1c
-			# Difference from v1b: replaces TimeStamp (TS) limit & removes next_D rise and fall limits.
-			N=17;  k = 0.94;  # k = adjustment for N=17 so that ST=1 for constant hashrate
-			# N=8; k=0.92;   # use this instead if hash attacks are still a problem.
-			&correct_negative_timestamp  # see above. This may prevent the next line from executing (pseudocode error)
-			next_D = k * sum(last N Ds) * T / [max(last N TSs) - min(last N TSs]
+			/* Zawy v1b modified
+			   with limit first and last solvetime of the window
 			*/
 
 			size_t m_difficultyWindow_2 = CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
@@ -487,70 +483,103 @@ namespace CryptoNote {
 				return 1;
 			}
 	
-			uint64_t next_D;
-			double unmap = 0.625; // we use M_LN2 instead
 			double T = static_cast<double>(m_difficultyTarget);
-			std::vector<double> Hashrates;
+			double N = int((length - 1));
+
+
+			// get solvetimes from timestamps and keep negative solvetimes
+			// get corresponding difficulties
+			// effective window N = 15
+
 			std::vector<double> solveTimes;
-
-			for (size_t i = 0; i < length - 1; i++){
-				double SolveTime = timestamps[i + 1] - timestamps[i];
+			std::vector<double> difficulties;
+			for (size_t i = 1; i < N; i++){
+				double difficulty = static_cast<double>(cumulativeDifficulties[i + 1] - cumulativeDifficulties[i]);
+				difficulties.push_back(difficulty);
+				logger(INFO) << "D: " << difficulty;
+				double SolveTime = static_cast<double>(timestamps[i + 1]) - static_cast<double>(timestamps[i]);
 				solveTimes.push_back(SolveTime);
+				logger(INFO) << "ST: " << SolveTime;
 			}
 
+			// limit first and last solvetime of the window 
+			// in case it's outlier
+			// inside solvetimes are counterweighting each other
+			// if one of them is a lie
+
+			double TSL = 10;
+			double lastSolveTime = solveTimes.front();
+			double prevLastSolveTime = static_cast<double>(timestamps[1]) - static_cast<double>(timestamps.front());
+			logger(INFO) << "prevLastSolveTime: " << prevLastSolveTime;
+
+			double firstSolveTime = solveTimes.back();
 			double prevSolveTime = solveTimes.end()[-2];
-			double currentSolveTime = solveTimes.back();
-			double firstSolveTime = solveTimes.front();
-
-			// Eliminate negative ST before the mapping loop above.
-			// N = number of block going in reverse.N = 1 is previous block.
-			// The following ST changes are permanent.
-
-			// Ignore most recent ST if it's < 0.
-			if (solveTimes.back() < 0) {
-				if (solveTimes.back() + solveTimes.end()[-2] > 0) {
-					solveTimes.back() = (solveTimes.back() + solveTimes.end()[-2]) / 2;
-					solveTimes.end()[-2] = solveTimes.back();
-				}
-				else {
-					return cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2]; // exit / return completely....get out of next_D routine
-				}
+			// the oldest block in window is here 
+			if (lastSolveTime > 0 && lastSolveTime > (prevLastSolveTime + TSL * T) && prevLastSolveTime < 0) {
+				lastSolveTime = prevLastSolveTime + lastSolveTime; //instead of + TSL * T; because those two counterweight each other if prev was a lie
+				solveTimes.front() = lastSolveTime;
+				logger(INFO) << "Last N solve time max limit crossed! Correcting to " << lastSolveTime;
+			}
+			if (lastSolveTime < (prevLastSolveTime - (TSL - 1) * T)) {
+				lastSolveTime = prevLastSolveTime - (TSL - 1) * T;
+				solveTimes.front() = lastSolveTime;
+				logger(INFO) << "Last N solve time min limit crossed! Correcting to " << lastSolveTime;
+			}
+			// the most recent block here
+			if (firstSolveTime >(prevSolveTime + TSL * T) && prevSolveTime > 0) {
+				firstSolveTime = prevSolveTime + TSL * T;
+				solveTimes.back() = firstSolveTime;
+				logger(INFO) << "First N solve time max limit crossed! Correcting to " << firstSolveTime;
+			}
+			if (firstSolveTime < (prevSolveTime - (TSL - 1) * T) && prevSolveTime > 0) {
+				firstSolveTime = prevSolveTime - (TSL - 1) * T;
+				solveTimes.back() = firstSolveTime;
+				logger(INFO) << "First N solve time min limit crossed! Correcting to " << firstSolveTime;
 			}
 
-			if (solveTimes.end()[-2] < 0) //  ST[1}+ST[2] in the previous block was negative. The previous ST[1] is now ST[2]
-			{
-				if ((solveTimes.back() + solveTimes.end()[-2] + solveTimes.end()[-3]) > 0) {
-					double temp_ST = (solveTimes.end()[-3] + solveTimes.end()[-2] + solveTimes.back()) / 3;
-					solveTimes.end()[-3] = temp_ST;
-					solveTimes.end()[-2] = temp_ST;
-					solveTimes.back() = temp_ST;
-				}
-				else {
-					// there were 2 or 3 negative timestamps in a row.
-					// We don't know if ST[2] and ST[3] were early or if ST[4] and/or ST[5] were late.  
-					// Best and safest thing is to make them median ST
-					double temp_ST_median;
-					if (solveTimes.size() % 2 == 0) // even
-						temp_ST_median = (solveTimes[solveTimes.size() / 2 - 1] + solveTimes[solveTimes.size() / 2]) / 2;
-					else // odd
-						temp_ST_median = solveTimes[solveTimes.size() / 2];
 
-					solveTimes.end()[-2] = temp_ST_median;
-					solveTimes.end()[-3] = temp_ST_median;
-				}
+			// calculate averages
+
+			double avgST = std::accumulate(solveTimes.begin(), solveTimes.end(), 0.0) / solveTimes.size();
+			// just in case
+			if (avgST == 0)
+				avgST = T;
+			if (avgST < 0)
+				avgST *= -1;
+
+			logger(INFO) << "avgST: " << avgST;
+
+			double avgDifficulty = std::accumulate(difficulties.begin(), difficulties.end(), 0.0) / difficulties.size();
+			assert(avgDifficulty > 0);
+
+			logger(INFO) << "avgDifficulty: " << avgDifficulty;
+
+			logger(INFO) << "effective N: " << solveTimes.size();
+
+			double nextD = avgDifficulty * T / avgST / (1 + M_LN2 / (N - 1));
+
+			logger(INFO) << "nextD: " << nextD;
+
+			difficulty_type previous_D = cumulativeDifficulties.back() - cumulativeDifficulties.end()[-2];
+
+			if (nextD < 0) {
+				nextD = static_cast<double>(previous_D)* 1.20;
 			}
 
-			double k = 0.94;
-			double Ds = static_cast<double>(cumulativeDifficulties.back() - cumulativeDifficulties.front()); // cumulative diff for window N = 16 without FIRST block, not last, this is actually correct
+			uint64_t next_D = static_cast<uint64_t>(nextD);
 
-			assert(Ds > 0);
-			double ST = std::accumulate(solveTimes.begin(), solveTimes.end(), 0.0); // instead of [max(last N TSs) - min(last N TSs] since we use corrected timespans instead of timestamps
-			if (ST == 0) {
-				ST = 1;
+			double compare = nextD / static_cast<double>(previous_D);
+
+			if (compare > 2) {
+				next_D = previous_D * 2;
+				logger(INFO) << "Difficulty increases too rapidly, throttle down to double the previous: " << next_D;
 			}
-			double nextD = k * Ds * T / ST;
 
-			next_D = static_cast<uint64_t>(nextD);
+			if (compare < 0.5) {
+				next_D = previous_D / 2;
+				logger(INFO) << "Difficulty decreases too much, set half the previous: " << next_D;
+			}
+
 			if (next_D < 1)
 				next_D = 1;
 
