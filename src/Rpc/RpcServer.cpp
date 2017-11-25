@@ -100,7 +100,8 @@ std::unordered_map<std::string, RpcServer::RpcHandler<RpcServer::HandlerFunction
   { "/getheight", { jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height), true } },
   { "/gettransactions", { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions), false } },
   { "/sendrawtransaction", { jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx), false } },
-  { "/feeaddress", { jsonMethod<COMMAND_RPC_GET_FEE_ADDRESS>(&RpcServer::on_get_fee_address), true } },  
+  { "/feeaddress", { jsonMethod<COMMAND_RPC_GET_FEE_ADDRESS>(&RpcServer::on_get_fee_address), true } },
+  { "/peers", { jsonMethod<COMMAND_RPC_GET_PEER_LIST>(&RpcServer::on_get_peer_list), true } },
   
   // disabled in restricted rpc mode
   { "/start_mining", { jsonMethod<COMMAND_RPC_START_MINING>(&RpcServer::on_start_mining), false } },
@@ -509,6 +510,19 @@ bool RpcServer::on_get_fee_address(const COMMAND_RPC_GET_FEE_ADDRESS::request& r
   res.fee_address = m_fee_address;
   res.status = CORE_RPC_STATUS_OK;
   return true;
+}
+
+bool RpcServer::on_get_peer_list(const COMMAND_RPC_GET_PEER_LIST::request& req, COMMAND_RPC_GET_PEER_LIST::response& res) {
+	std::list<PeerlistEntry> pl_wite;
+	std::list<PeerlistEntry> pl_gray;
+	m_p2p.getPeerlistManager().get_peerlist_full(pl_gray, pl_wite);
+	for (const auto& pe : pl_wite) {
+		std::stringstream ss;
+		ss << pe.adr;
+		res.peers.push_back(ss.str());
+	}
+	res.status = CORE_RPC_STATUS_OK;
+	return true;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
