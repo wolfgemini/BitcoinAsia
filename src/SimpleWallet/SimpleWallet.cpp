@@ -1967,7 +1967,7 @@ int main(int argc, char* argv[]) {
   }
 
   //set up logging options
-  Level logLevel = DEBUGGING;
+  Level logLevel = TRACE;
 
   if (command_line::has_arg(vm, arg_log_level)) {
     logLevel = static_cast<Level>(command_line::get_arg(vm, arg_log_level));
