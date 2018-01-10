@@ -233,11 +233,12 @@ bool wallet_rpc_server::on_store(const wallet_rpc::COMMAND_RPC_STORE::request& r
 {
 	try
 	{
-		WalletHelper::storeWallet(m_wallet, m_walletFilename);
+		res.stored = WalletHelper::storeWallet(m_wallet, m_walletFilename);
 	}
 	catch (std::exception& e)
 	{
 		throw JsonRpc::JsonRpcError(WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR, std::string("Couldn't save wallet: ") + e.what());
+		return false;
 	}
 	return true;
 }
@@ -293,7 +294,8 @@ bool wallet_rpc_server::on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANS
 	{
 		WalletLegacyTransaction txInfo;
 		m_wallet.getTransaction(trantransactionNumber, txInfo);
-		if (txInfo.state != WalletLegacyTransactionState::Active || txInfo.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT)
+		//if (txInfo.state != WalletLegacyTransactionState::Sending || txInfo.state != WalletLegacyTransactionState::Active || txInfo.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT)
+		if (txInfo.state == WalletLegacyTransactionState::Cancelled || txInfo.state == WalletLegacyTransactionState::Deleted || txInfo.state == WalletLegacyTransactionState::Failed)
 			continue;
 
 		std::string address = "";
@@ -315,9 +317,9 @@ bool wallet_rpc_server::on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANS
 		transfer.unlockTime		 = txInfo.unlockTime;
 		transfer.paymentId		 = "";
 
-		std::vector<uint8_t> extraVec(txInfo.extra.size());
-		std::for_each(txInfo.extra.begin(), txInfo.extra.end(), 
-			[&extraVec](const char el) { extraVec.push_back(el); });
+		std::vector<uint8_t> extraVec;
+		extraVec.reserve(txInfo.extra.size());
+		std::for_each(txInfo.extra.begin(), txInfo.extra.end(), [&extraVec](const char el) { extraVec.push_back(el); });
 
 		Crypto::Hash paymentId;
 		transfer.paymentId = (getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId != NULL_HASH ? Common::podToHex(paymentId) : "");
