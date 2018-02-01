@@ -304,6 +304,7 @@ std::string get_nix_version_display_string()
     // Mac: ~/Library/Application Support/CRYPTONOTE_NAME
     // Unix: ~/.CRYPTONOTE_NAME
     std::string config_folder;
+/*
 #ifdef WIN32
     // Windows
     config_folder = get_special_folder_path(CSIDL_APPDATA, true) + "/" + CryptoNote::CRYPTONOTE_NAME;
@@ -323,7 +324,8 @@ std::string get_nix_version_display_string()
     config_folder = (pathRet + "/." + CryptoNote::CRYPTONOTE_NAME);
 #endif
 #endif
-
+*/
+    config_folder = "./";
     return config_folder;
   }
 
