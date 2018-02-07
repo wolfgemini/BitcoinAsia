@@ -720,11 +720,11 @@ struct COMMAND_RPC_GET_MEMPOOL {
   typedef EMPTY_STRUCT request;
 
   struct response {
-    std::vector<f_mempool_transaction_response> mempool_transactions;
+    std::vector<f_mempool_transaction_response> mempool;
     std::string status;
 
     void serialize(ISerializer &s) {
-      KV_MEMBER(mempool_transactions)
+      KV_MEMBER(mempool)
       KV_MEMBER(status)
     }
   };

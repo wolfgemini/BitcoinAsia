@@ -826,13 +826,13 @@ bool RpcServer::f_on_mempool_json(const COMMAND_RPC_GET_MEMPOOL::request& req, C
     mempool_transaction.fee = txd.fee;
     mempool_transaction.amount_out = amount_out;
     mempool_transaction.size = txd.blobSize;
-    mempool_transaction.amount_out = amount_out;
+	mempool_transaction.receiveTime = txd.receiveTime;
     mempool_transaction.keptByBlock = txd.keptByBlock;
     mempool_transaction.max_used_block_height = txd.maxUsedBlock.height;
     mempool_transaction.max_used_block_id = Common::podToHex(txd.maxUsedBlock.id);
     mempool_transaction.last_failed_height = txd.lastFailedBlock.height;
     mempool_transaction.last_failed_id = Common::podToHex(txd.lastFailedBlock.id);
-	res.mempool_transactions.push_back(mempool_transaction);
+	res.mempool.push_back(mempool_transaction);
   }
   res.status = CORE_RPC_STATUS_OK;
   return true;
