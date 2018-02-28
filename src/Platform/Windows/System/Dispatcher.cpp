@@ -27,6 +27,11 @@
 #include <winsock2.h>
 #include "ErrorMessage.h"
 
+//#if WINVER==0x0501 // XP
+#include "iocp.h"
+#include "iocp.c"
+//#endif
+
 namespace System {
 
 namespace {
@@ -44,7 +49,7 @@ Dispatcher::Dispatcher() {
   BOOL result = InitializeCriticalSectionAndSpinCount(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection), 4000);
   assert(result != FALSE);
   std::string message;
-  if (ConvertThreadToFiberEx(NULL, 0) == NULL) {
+  if (ConvertThreadToFiber(NULL) == NULL) {
     message = "ConvertThreadToFiberEx failed, " + lastErrorMessage();
   } else {
     completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
@@ -155,6 +160,30 @@ void Dispatcher::dispatch() {
     DWORD timeout = timers.empty() ? INFINITE : static_cast<DWORD>(std::min(timers.begin()->first - currentTime, static_cast<uint64_t>(INFINITE - 1)));
     OVERLAPPED_ENTRY entry;
     ULONG actual = 0;
+
+//#if WINVER==0x0501 // XP
+
+    if (nn_getqueuedcompletionstatusex(completionPort, &entry, 1, &actual, timeout, TRUE) == TRUE) {
+      if (entry.lpOverlapped == reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)) {
+        EnterCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
+        assert(remoteNotificationSent);
+        assert(!remoteSpawningProcedures.empty());
+        do {
+          spawn(std::move(remoteSpawningProcedures.front()));
+          remoteSpawningProcedures.pop();
+        } while (!remoteSpawningProcedures.empty());
+
+        remoteNotificationSent = false;
+        LeaveCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
+        continue;
+      }
+
+      context = reinterpret_cast<DispatcherContext*>(entry.lpOverlapped)->context;
+      break;
+    }
+/*
+#else
+
     if (GetQueuedCompletionStatusEx(completionPort, &entry, 1, &actual, timeout, TRUE) == TRUE) {
       if (entry.lpOverlapped == reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)) {
         EnterCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
@@ -174,6 +203,8 @@ void Dispatcher::dispatch() {
       break;
     }
 
+#endif
+*/
     DWORD lastError = GetLastError();
     if (lastError == WAIT_TIMEOUT) {
       continue;
@@ -288,6 +319,41 @@ void Dispatcher::yield() {
 
     OVERLAPPED_ENTRY entries[16];
     ULONG actual = 0;
+
+//#if WINVER==0x0501 // XP
+
+    if (nn_getqueuedcompletionstatusex(completionPort, entries, 16, &actual, 0, TRUE) == TRUE) {
+      assert(actual > 0);
+      for (ULONG i = 0; i < actual; ++i) {
+        if (entries[i].lpOverlapped == reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)) {
+          EnterCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
+          assert(remoteNotificationSent);
+          assert(!remoteSpawningProcedures.empty());
+          do {
+            spawn(std::move(remoteSpawningProcedures.front()));
+            remoteSpawningProcedures.pop();
+          } while (!remoteSpawningProcedures.empty());
+
+          remoteNotificationSent = false;
+          LeaveCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
+          continue;
+        }
+
+        NativeContext* context = reinterpret_cast<DispatcherContext*>(entries[i].lpOverlapped)->context;
+        context->interruptProcedure = nullptr;
+        pushContext(context);
+      }
+    } else {
+      DWORD lastError = GetLastError();
+      if (lastError == WAIT_TIMEOUT) {
+        break;
+      } else if (lastError != WAIT_IO_COMPLETION) {
+        throw std::runtime_error("Dispatcher::yield, GetQueuedCompletionStatusEx failed, " + errorMessage(lastError));
+      }
+    }
+/*
+#else
+
     if (GetQueuedCompletionStatusEx(completionPort, entries, 16, &actual, 0, TRUE) == TRUE) {
       assert(actual > 0);
       for (ULONG i = 0; i < actual; ++i) {
@@ -317,6 +383,10 @@ void Dispatcher::yield() {
         throw std::runtime_error("Dispatcher::yield, GetQueuedCompletionStatusEx failed, " + errorMessage(lastError));
       }
     }
+
+#endif
+*/
+
   }
 
   if (firstResumingContext != nullptr) {

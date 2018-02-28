@@ -28,6 +28,10 @@
 #include "ErrorMessage.h"
 #include "TcpConnection.h"
 
+//#if WINVER==0x0501 // XP
+#include "iocp.h"
+//#endif
+
 namespace System {
 
 namespace {
@@ -122,6 +126,17 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
                 assert(context != nullptr);
                 TcpConnectorContext* context2 = static_cast<TcpConnectorContext*>(context);
                 if (!context2->interrupted) {
+//#if WINVER==0x0501 // XP
+                    if (nn_cancelioex(reinterpret_cast<HANDLE>(context2->connection), context2) != TRUE) {
+                      DWORD lastError = GetLastError();
+                      if (lastError != ERROR_NOT_FOUND) {
+                        throw std::runtime_error("TcpConnector::stop, CancelIoEx failed, " + lastErrorMessage());
+                      }
+
+                      context2->context->interrupted = true;
+                    }
+/*
+#else
                   if (CancelIoEx(reinterpret_cast<HANDLE>(context2->connection), context2) != TRUE) {
                     DWORD lastError = GetLastError();
                     if (lastError != ERROR_NOT_FOUND) {
@@ -130,7 +145,8 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
 
                     context2->context->interrupted = true;
                   }
-
+#endif
+*/
                   context2->interrupted = true;
                 }
               };

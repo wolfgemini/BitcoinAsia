@@ -28,6 +28,10 @@
 #include "ErrorMessage.h"
 #include "TcpConnection.h"
 
+//#if WINVER==0x0501 // XP
+#include "iocp.h"
+//#endif
+
 namespace System {
 
 namespace {
@@ -148,6 +152,17 @@ TcpConnection TcpListener::accept() {
           assert(context != nullptr);
           TcpListenerContext* context2 = static_cast<TcpListenerContext*>(context);
           if (!context2->interrupted) {
+//#if WINVER==0x0501 // XP
+              if (nn_cancelioex(reinterpret_cast<HANDLE>(listener), context2) != TRUE) {
+                DWORD lastError = GetLastError();
+                if (lastError != ERROR_NOT_FOUND) {
+                  throw std::runtime_error("TcpListener::stop, CancelIoEx failed, " + lastErrorMessage());
+                }
+
+                context2->context->interrupted = true;
+              }
+/*
+#else
             if (CancelIoEx(reinterpret_cast<HANDLE>(listener), context2) != TRUE) {
               DWORD lastError = GetLastError();
               if (lastError != ERROR_NOT_FOUND) {
@@ -156,7 +171,8 @@ TcpConnection TcpListener::accept() {
 
               context2->context->interrupted = true;
             }
-
+#endif
+*/
             context2->interrupted = true;
           }
         };

@@ -27,6 +27,11 @@
 #include "Dispatcher.h"
 #include "ErrorMessage.h"
 
+//#if WINVER==0x0501 // XP
+#include "iocp.h"
+//#endif
+
+
 namespace System {
 
 namespace {
@@ -110,6 +115,19 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
     assert(readContext != nullptr);
     TcpConnectionContext* context = static_cast<TcpConnectionContext*>(readContext);
     if (!context->interrupted) {
+//#if WINVER==0x0501 // XP
+
+      if (nn_cancelioex(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
+          DWORD lastError = GetLastError();
+          if (lastError != ERROR_NOT_FOUND) {
+            throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, " + lastErrorMessage());
+          }
+
+          context->context->interrupted = true;
+       }
+/*
+#else
+
       if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
         DWORD lastError = GetLastError();
         if (lastError != ERROR_NOT_FOUND) {
@@ -119,6 +137,8 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
         context->context->interrupted = true;
       }
 
+#endif
+*/
       context->interrupted = true;
     }
   };
@@ -178,6 +198,16 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
     assert(writeContext != nullptr);
     TcpConnectionContext* context = static_cast<TcpConnectionContext*>(writeContext);
     if (!context->interrupted) {
+#if WINVER==0x0501 // XP
+        if (nn_cancelioex(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
+          DWORD lastError = GetLastError();
+          if (lastError != ERROR_NOT_FOUND) {
+            throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, " + lastErrorMessage());
+          }
+
+          context->context->interrupted = true;
+        }
+#else
       if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
         DWORD lastError = GetLastError();
         if (lastError != ERROR_NOT_FOUND) {
@@ -186,6 +216,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
 
         context->context->interrupted = true;
       }
+#endif
 
       context->interrupted = true;
     }
